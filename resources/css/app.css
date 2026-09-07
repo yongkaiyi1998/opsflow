@@ -1,9 +1,5 @@
-@import 'tailwindcss';
+@import 'bootstrap/dist/css/bootstrap.min.css';
 
-@source '../../vendor/laravel/framework/src/Illuminate/Pagination/resources/views/*.blade.php';
-@source '../../storage/framework/views/*.php';
-
-@theme {
-    --font-sans: 'Instrument Sans', ui-sans-serif, system-ui, sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji',
-        'Segoe UI Symbol', 'Noto Color Emoji';
-}
+body { background: #f4f6fa; }
+.auth-card { max-width: 28rem; }
+.app-sidebar { min-width: 14rem; }

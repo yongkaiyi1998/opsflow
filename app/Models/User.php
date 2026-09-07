@@ -2,7 +2,8 @@
 
 namespace App\Models;
 
-// use Illuminate\Contracts\Auth\MustVerifyEmail;
+use App\UserRole;
+use App\UserStatus;
 use Database\Factories\UserFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Attributes\Hidden;
@@ -17,6 +18,16 @@ class User extends Authenticatable
     /** @use HasFactory<UserFactory> */
     use HasFactory, Notifiable;
 
+    protected $attributes = [
+        'role' => 'EMPLOYEE',
+        'status' => 'ACTIVE',
+    ];
+
+    public function isActive(): bool
+    {
+        return $this->status === UserStatus::Active;
+    }
+
     /**
      * Get the attributes that should be cast.
      *
@@ -25,6 +36,8 @@ class User extends Authenticatable
     protected function casts(): array
     {
         return [
+            'role' => UserRole::class,
+            'status' => UserStatus::class,
             'email_verified_at' => 'datetime',
             'password' => 'hashed',
         ];
