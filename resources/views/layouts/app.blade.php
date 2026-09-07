@@ -22,7 +22,14 @@
     <div class="d-md-flex min-vh-100">
         <aside class="app-sidebar bg-white border-end p-3">
             <nav aria-label="Main navigation" class="nav nav-pills flex-column">
-                <a class="nav-link active" aria-current="page" href="{{ route('dashboard') }}">Dashboard</a>
+                <a class="nav-link {{ request()->routeIs('dashboard') ? 'active' : '' }}" href="{{ route('dashboard') }}">Dashboard</a>
+                @can('viewAny', App\Models\Department::class)
+                    <span class="text-uppercase text-secondary small fw-semibold mt-4 mb-2 px-3">Administration</span>
+                    <a class="nav-link {{ request()->routeIs('users.*') ? 'active' : '' }}" href="{{ route('users.index') }}">Users</a>
+                    <a class="nav-link {{ request()->routeIs('departments.*') ? 'active' : '' }}" href="{{ route('departments.index') }}">Departments</a>
+                    <a class="nav-link {{ request()->routeIs('spend-categories.*') ? 'active' : '' }}" href="{{ route('spend-categories.index') }}">Spend categories</a>
+                    <a class="nav-link {{ request()->routeIs('vendors.*') ? 'active' : '' }}" href="{{ route('vendors.index') }}">Vendors</a>
+                @endcan
             </nav>
         </aside>
         <main class="flex-grow-1 p-3 p-md-5" id="main-content">

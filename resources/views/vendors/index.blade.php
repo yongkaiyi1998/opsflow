@@ -1,0 +1,9 @@
+@extends('layouts.app')
+@section('title', 'Vendors')
+@section('content')
+<div class="d-flex flex-wrap justify-content-between align-items-center gap-3 mb-4"><div><h1 class="h2 mb-1">Vendors</h1><p class="text-secondary mb-0">Maintain supplier contact and lifecycle details.</p></div><a class="btn btn-primary" href="{{ route('vendors.create') }}">Add vendor</a></div>
+<form class="row g-2 mb-4" method="GET"><div class="col-md-5"><label class="visually-hidden" for="search">Search vendors</label><input class="form-control" id="search" name="search" value="{{ $search }}" placeholder="Search name, code, email or phone"></div><div class="col-auto"><button class="btn btn-outline-secondary" type="submit">Search</button></div>@if ($search)<div class="col-auto"><a class="btn btn-link" href="{{ route('vendors.index') }}">Clear</a></div>@endif</form>
+<div class="card border-0 shadow-sm"><div class="table-responsive"><table class="table table-hover align-middle mb-0"><thead class="table-light"><tr><th>Name</th><th>Code</th><th>Contact</th><th>Status</th><th class="text-end">Action</th></tr></thead><tbody>
+@forelse ($vendors as $vendor)<tr><td>{{ $vendor->name }}</td><td>{{ $vendor->code ?? '—' }}</td><td><div>{{ $vendor->email ?? '—' }}</div>@if ($vendor->phone)<small class="text-secondary">{{ $vendor->phone }}</small>@endif</td><td><span class="badge {{ $vendor->status === App\MasterDataStatus::Active ? 'text-bg-success' : 'text-bg-secondary' }}">{{ ucfirst(strtolower($vendor->status->value)) }}</span></td><td class="text-end"><a class="btn btn-sm btn-outline-primary" href="{{ route('vendors.edit', $vendor) }}">Edit</a></td></tr>@empty<tr><td class="text-center text-secondary py-5" colspan="5">No vendors found.</td></tr>@endforelse
+</tbody></table></div></div><div class="mt-3">{{ $vendors->links() }}</div>
+@endsection

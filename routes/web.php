@@ -3,6 +3,10 @@
 use App\Http\Controllers\Auth\AuthenticatedSessionController;
 use App\Http\Controllers\Auth\NewPasswordController;
 use App\Http\Controllers\Auth\PasswordResetLinkController;
+use App\Http\Controllers\DepartmentController;
+use App\Http\Controllers\SpendCategoryController;
+use App\Http\Controllers\UserController;
+use App\Http\Controllers\VendorController;
 use Illuminate\Support\Facades\Route;
 
 Route::redirect('/', '/dashboard');
@@ -19,4 +23,8 @@ Route::middleware('guest')->group(function (): void {
 Route::post('/logout', [AuthenticatedSessionController::class, 'destroy'])->middleware('auth')->name('logout');
 Route::middleware(['auth', 'auth.session', 'active'])->group(function (): void {
     Route::view('/dashboard', 'dashboard')->name('dashboard');
+    Route::resource('departments', DepartmentController::class)->except(['show', 'destroy']);
+    Route::resource('spend-categories', SpendCategoryController::class)->except(['show', 'destroy']);
+    Route::resource('vendors', VendorController::class)->except(['show', 'destroy']);
+    Route::resource('users', UserController::class)->except(['show', 'destroy']);
 });
