@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\AttachmentController;
 use App\Http\Controllers\Auth\AuthenticatedSessionController;
 use App\Http\Controllers\Auth\NewPasswordController;
 use App\Http\Controllers\Auth\PasswordResetLinkController;
@@ -23,6 +24,8 @@ Route::middleware('guest')->group(function (): void {
 Route::post('/logout', [AuthenticatedSessionController::class, 'destroy'])->middleware('auth')->name('logout');
 Route::middleware(['auth', 'auth.session', 'active'])->group(function (): void {
     Route::view('/dashboard', 'dashboard')->name('dashboard');
+    Route::get('/attachments/{attachment}/download', [AttachmentController::class, 'download'])->name('attachments.download');
+    Route::delete('/attachments/{attachment}', [AttachmentController::class, 'destroy'])->name('attachments.destroy');
     Route::resource('departments', DepartmentController::class)->except(['show', 'destroy']);
     Route::resource('spend-categories', SpendCategoryController::class)->except(['show', 'destroy']);
     Route::resource('vendors', VendorController::class)->except(['show', 'destroy']);

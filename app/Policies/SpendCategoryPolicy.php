@@ -7,6 +7,11 @@ use App\Models\User;
 
 class SpendCategoryPolicy
 {
+    public function view(User $user, SpendCategory $spendCategory): bool
+    {
+        return $user->isAdmin();
+    }
+
     public function viewAny(User $user): bool
     {
         return $user->isAdmin();
