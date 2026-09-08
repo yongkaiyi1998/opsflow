@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Models\ActivityLog;
 use App\Models\User;
+use App\Models\WorkflowVersion;
 use App\Support\Money;
 use BackedEnum;
 use DateTimeInterface;
@@ -59,6 +60,19 @@ class AuditService
             ['status' => $newStatus],
             $request,
             $metadata,
+        );
+    }
+
+    public function logWorkflowPublished(WorkflowVersion $version, User $actor, ?Request $request = null): ActivityLog
+    {
+        return $this->createLog(
+            $version,
+            $actor,
+            'WORKFLOW_VERSION_PUBLISHED',
+            ['status' => 'DRAFT'],
+            ['status' => 'PUBLISHED'],
+            $request,
+            ['workflow_template_id' => $version->workflow_template_id, 'version' => $version->version],
         );
     }
 

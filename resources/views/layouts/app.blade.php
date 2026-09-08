@@ -29,6 +29,7 @@
                     <a class="nav-link {{ request()->routeIs('departments.*') ? 'active' : '' }}" href="{{ route('departments.index') }}">Departments</a>
                     <a class="nav-link {{ request()->routeIs('spend-categories.*') ? 'active' : '' }}" href="{{ route('spend-categories.index') }}">Spend categories</a>
                     <a class="nav-link {{ request()->routeIs('vendors.*') ? 'active' : '' }}" href="{{ route('vendors.index') }}">Vendors</a>
+                    <a class="nav-link {{ request()->routeIs('workflow-*') ? 'active' : '' }}" href="{{ route('workflow-templates.index') }}">Workflows</a>
                 @endcan
             </nav>
         </aside>
