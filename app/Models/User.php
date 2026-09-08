@@ -50,6 +50,16 @@ class User extends Authenticatable
         return $this->hasMany(self::class, 'manager_id');
     }
 
+    public function approvalAssignments(): HasMany
+    {
+        return $this->hasMany(ApprovalAssignment::class, 'approver_id');
+    }
+
+    public function approvalActions(): HasMany
+    {
+        return $this->hasMany(ApprovalAction::class, 'actor_id');
+    }
+
     /**
      * Get the attributes that should be cast.
      *

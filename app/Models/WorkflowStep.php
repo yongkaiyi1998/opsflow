@@ -10,6 +10,7 @@ use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use LogicException;
 
 #[Fillable(['workflow_rule_group_id', 'step_order', 'name', 'approver_type', 'approver_value', 'approval_mode', 'minimum_approvals', 'sla_hours'])]
@@ -21,6 +22,11 @@ class WorkflowStep extends Model
     public function ruleGroup(): BelongsTo
     {
         return $this->belongsTo(WorkflowRuleGroup::class, 'workflow_rule_group_id');
+    }
+
+    public function runtimeSteps(): HasMany
+    {
+        return $this->hasMany(ApprovalStepInstance::class);
     }
 
     protected function casts(): array

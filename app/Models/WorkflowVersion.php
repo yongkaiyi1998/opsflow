@@ -27,6 +27,11 @@ class WorkflowVersion extends Model
         return $this->hasMany(WorkflowRuleGroup::class)->orderBy('priority')->orderBy('id');
     }
 
+    public function approvalInstances(): HasMany
+    {
+        return $this->hasMany(ApprovalInstance::class);
+    }
+
     public function creator(): BelongsTo
     {
         return $this->belongsTo(User::class, 'created_by');

@@ -32,6 +32,11 @@ class WorkflowRuleGroup extends Model
         return $this->hasMany(WorkflowStep::class)->orderBy('step_order');
     }
 
+    public function approvalInstances(): HasMany
+    {
+        return $this->hasMany(ApprovalInstance::class);
+    }
+
     protected function casts(): array
     {
         return ['is_default' => 'boolean'];

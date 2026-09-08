@@ -60,4 +60,30 @@ final readonly class WorkflowContext
             WorkflowRuleField::Category => $this->categoryId,
         };
     }
+
+    /** @return array{module_type: string, requester_id: int, department_id: ?int, category_id: ?int, amount: string, currency: string} */
+    public function snapshot(): array
+    {
+        return [
+            'module_type' => $this->moduleType->value,
+            'requester_id' => $this->requesterId,
+            'department_id' => $this->departmentId,
+            'category_id' => $this->categoryId,
+            'amount' => $this->amount->decimal(),
+            'currency' => $this->currency,
+        ];
+    }
+
+    /** @param array{module_type: string, requester_id: int, department_id: ?int, category_id: ?int, amount: string, currency: string} $snapshot */
+    public static function fromSnapshot(array $snapshot): self
+    {
+        return self::fromValues(
+            $snapshot['module_type'],
+            $snapshot['requester_id'],
+            $snapshot['department_id'],
+            $snapshot['category_id'],
+            $snapshot['amount'],
+            $snapshot['currency'],
+        );
+    }
 }
