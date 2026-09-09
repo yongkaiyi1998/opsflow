@@ -23,6 +23,7 @@
         <aside class="app-sidebar bg-white border-end p-3">
             <nav aria-label="Main navigation" class="nav nav-pills flex-column">
                 <a class="nav-link {{ request()->routeIs('dashboard') ? 'active' : '' }}" href="{{ route('dashboard') }}">Dashboard</a>
+                <a class="nav-link {{ request()->routeIs('purchase-requests.*') || request()->routeIs('purchase-request-attachments.*') ? 'active' : '' }}" href="{{ route('purchase-requests.index') }}">Purchase requests</a>
                 @can('viewAny', App\Models\Department::class)
                     <span class="text-uppercase text-secondary small fw-semibold mt-4 mb-2 px-3">Administration</span>
                     <a class="nav-link {{ request()->routeIs('users.*') ? 'active' : '' }}" href="{{ route('users.index') }}">Users</a>
@@ -50,5 +51,6 @@
         </div>
     </main>
 @endauth
+@stack('scripts')
 </body>
 </html>
