@@ -27,6 +27,9 @@
                 @can('viewAny', App\Models\SupplierInvoice::class)
                     <a class="nav-link {{ request()->routeIs('supplier-invoices.*') || request()->routeIs('supplier-invoice-attachments.*') ? 'active' : '' }}" href="{{ route('supplier-invoices.index') }}">Supplier invoices</a>
                 @endcan
+                @can('viewAny', App\Models\ExpenseClaim::class)
+                    <a class="nav-link {{ request()->routeIs('expense-claims.*') || request()->routeIs('expense-item-attachments.*') ? 'active' : '' }}" href="{{ route('expense-claims.index') }}">Expense claims</a>
+                @endcan
                 @can('viewAny', App\Models\Department::class)
                     <span class="text-uppercase text-secondary small fw-semibold mt-4 mb-2 px-3">Administration</span>
                     <a class="nav-link {{ request()->routeIs('users.*') ? 'active' : '' }}" href="{{ route('users.index') }}">Users</a>

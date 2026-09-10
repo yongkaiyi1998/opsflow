@@ -1,0 +1,351 @@
+[1mdiff --git a/app/Services/SupplierInvoiceService.php b/app/Services/SupplierInvoiceService.php[m
+[1mnew file mode 100644[m
+[1mindex 0000000..5e63ebe[m
+[1m--- /dev/null[m
+[1m+++ b/app/Services/SupplierInvoiceService.php[m
+[36m@@ -0,0 +1,345 @@[m
+[32m+[m[32m<?php[m
+[32m+[m
+[32m+[m[32mnamespace App\Services;[m
+[32m+[m
+[32m+[m[32muse App\Exceptions\ApprovalRuntimeException;[m
+[32m+[m[32muse App\Exceptions\WorkflowResolutionException;[m
+[32m+[m[32muse App\MasterDataStatus;[m
+[32m+[m[32muse App\Models\SupplierInvoice;[m
+[32m+[m[32muse App\Models\User;[m
+[32m+[m[32muse App\ReferenceType;[m
+[32m+[m[32muse App\SupplierInvoiceStatus;[m
+[32m+[m[32muse App\Support\Money;[m
+[32m+[m[32muse App\WorkflowContext;[m
+[32m+[m[32muse App\WorkflowModuleType;[m
+[32m+[m[32muse Illuminate\Auth\Access\AuthorizationException;[m
+[32m+[m[32muse Illuminate\Database\QueryException;[m
+[32m+[m[32muse Illuminate\Support\Facades\DB;[m
+[32m+[m[32muse Illuminate\Support\Facades\Gate;[m
+[32m+[m[32muse Illuminate\Support\Facades\Storage;[m
+[32m+[m[32muse Illuminate\Support\Str;[m
+[32m+[m[32muse Illuminate\Validation\ValidationException;[m
+[32m+[m[32muse InvalidArgumentException;[m
+[32m+[m[32muse OverflowException;[m
+[32m+[m
+[32m+[m[32mclass SupplierInvoiceService[m
+[32m+[m[32m{[m
+[32m+[m[32m    private const VENDOR_INVOICE_UNIQUE_INDEX = 'supplier_invoices_vendor_invoice_no_unique';[m
+[32m+[m
+[32m+[m[32m    public function __construct([m
+[32m+[m[32m        private readonly ReferenceNumberGenerator $referenceNumbers,[m
+[32m+[m[32m        private readonly WorkflowResolver $workflowResolver,[m
+[32m+[m[32m        private readonly WorkflowEngine $workflowEngine,[m
+[32m+[m[32m    ) {}[m
+[32m+[m
+[32m+[m[32m    /** @param array<string, mixed> $attributes */[m
+[32m+[m[32m    public function create(array $attributes, User $user): SupplierInvoice[m
+[32m+[m[32m    {[m
+[32m+[m[32m        Gate::forUser($user)->authorize('create', SupplierInvoice::class);[m
+[32m+[m
+[32m+[m[32m        try {[m
+[32m+[m[32m            return DB::transaction(function () use ($attributes, $user): SupplierInvoice {[m
+[32m+[m[32m                $lockedUser = User::query()->whereKey($user->id)->lockForUpdate()->firstOrFail();[m
+[32m+[m[32m                Gate::forUser($lockedUser)->authorize('create', SupplierInvoice::class);[m
+[32m+[m[32m                [$vendorId, $departmentId, $categoryId] = $this->validateMasterData($attributes);[m
+[32m+[m[32m                $invoiceNumber = $this->normalizeInvoiceNumber($attributes['invoice_no'] ?? null);[m
+[32m+[m[32m                $this->ensureUniqueVendorInvoice($vendorId, $invoiceNumber);[m
+[32m+[m[32m                [$items, $subtotal, $tax, $total] = $this->calculate($attributes);[m
+[32m+[m
+[32m+[m[32m                $invoice = SupplierInvoice::forceCreate([[m
+[32m+[m[32m                    'internal_no' => $this->referenceNumbers->next(ReferenceType::SupplierInvoice),[m
+[32m+[m[32m                    'invoice_no' => $invoiceNumber,[m
+[32m+[m[32m                    'vendor_id' => $vendorId,[m
+[32m+[m[32m                    'department_id' => $departmentId,[m
+[32m+[m[32m                    'category_id' => $categoryId,[m
+[32m+[m[32m                    'submitted_by' => $lockedUser->id,[m
+[32m+[m[32m                    'invoice_date' => $attributes['invoice_date'],[m
+[32m+[m[32m                    'due_date' => $attributes['due_date'] ?? null,[m
+[32m+[m[32m                    'currency' => 'MYR',[m
+[32m+[m[32m                    'subtotal' => $subtotal->decimal(),[m
+[32m+[m[32m                    'tax_amount' => $tax->decimal(),[m
+[32m+[m[32m                    'total_amount' => $total->decimal(),[m
+[32m+[m[32m                    'description' => trim((string) $attributes['description']),[m
+[32m+[m[32m                    'status' => SupplierInvoiceStatus::Draft,[m
+[32m+[m[32m                    'lock_version' => 1,[m
+[32m+[m[32m                ]);[m
+[32m+[m[32m                $invoice->items()->createMany($items);[m
+[32m+[m
+[32m+[m[32m                return $invoice->load(['items', 'vendor', 'department', 'category', 'submittedBy']);[m
+[32m+[m[32m            }, 5);[m
+[32m+[m[32m        } catch (QueryException $exception) {[m
+[32m+[m[32m            $this->throwIfVendorInvoiceConflict($exception);[m
+[32m+[m
+[32m+[m[32m            throw $exception;[m
+[32m+[m[32m        }[m
+[32m+[m[32m    }[m
+[32m+[m
+[32m+[m[32m    /** @param array<string, mixed> $attributes */[m
+[32m+[m[32m    public function update(SupplierInvoice $supplierInvoice, array $attributes, User $user): SupplierInvoice[m
+[32m+[m[32m    {[m
+[32m+[m[32m        try {[m
+[32m+[m[32m            return DB::transaction(function () use ($supplierInvoice, $attributes, $user): SupplierInvoice {[m
+[32m+[m[32m                $lockedInvoice = SupplierInvoice::query()->whereKey($supplierInvoice->id)->lockForUpdate()->firstOrFail();[m
+[32m+[m[32m                Gate::forUser($user)->authorize('update', $lockedInvoice);[m
+[32m+[m
+[32m+[m[32m                if ($lockedInvoice->lock_version !== (int) $attributes['lock_version']) {[m
+[32m+[m[32m                    throw ValidationException::withMessages([[m
+[32m+[m[32m                        'lock_version' => 'This supplier invoice changed while you were editing it. Reload and try again.',[m
+[32m+[m[32m                    ]);[m
+[32m+[m[32m                }[m
+[32m+[m
+[32m+[m[32m                [$vendorId, $departmentId, $categoryId] = $this->validateMasterData($attributes);[m
+[32m+[m[32m                $invoiceNumber = $this->normalizeInvoiceNumber($attributes['invoice_no'] ?? null);[m
+[32m+[m[32m                $this->ensureUniqueVendorInvoice($vendorId, $invoiceNumber, $lockedInvoice->id);[m
+[32m+[m[32m                [$items, $subtotal, $tax, $total] = $this->calculate($attributes);[m
+[32m+[m
+[32m+[m[32m                $lockedInvoice->forceFill([[m
+[32m+[m[32m                    'invoice_no' => $invoiceNumber,[m
+[32m+[m[32m                    'vendor_id' => $vendorId,[m
+[32m+[m[32m                    'department_id' => $departmentId,[m
+[32m+[m[32m                    'category_id' => $categoryId,[m
+[32m+[m[32m                    'invoice_date' => $attributes['invoice_date'],[m
+[32m+[m[32m                    'due_date' => $attributes['due_date'] ?? null,[m
+[32m+[m[32m                    'subtotal' => $subtotal->decimal(),[m
+[32m+[m[32m                    'tax_amount' => $tax->decimal(),[m
+[32m+[m[32m                    'total_amount' => $total->decimal(),[m
+[32m+[m[32m                    'description' => trim((string) $attributes['description']),[m
+[32m+[m[32m                    'lock_version' => $lockedInvoice->lock_version + 1,[m
+[32m+[m[32m                ])->save();[m
+[32m+[m[32m                $lockedInvoice->items()->delete();[m
+[32m+[m[32m                $lockedInvoice->items()->createMany($items);[m
+[32m+[m
+[32m+[m[32m                return $lockedInvoice->load(['items', 'vendor', 'department', 'category', 'submittedBy']);[m
+[32m+[m[32m            }, 5);[m
+[32m+[m[32m        } catch (QueryException $exception) {[m
+[32m+[m[32m            $this->throwIfVendorInvoiceConflict($exception);[m
+[32m+[m
+[32m+[m[32m            throw $exception;[m
+[32m+[m[32m        }[m
+[32m+[m[32m    }[m
+[32m+[m
+[32m+[m[32m    public function submit(SupplierInvoice $supplierInvoice, User $user): SupplierInvoice[m
+[32m+[m[32m    {[m
+[32m+[m[32m        return DB::transaction(function () use ($supplierInvoice, $user): SupplierInvoice {[m
+[32m+[m[32m            $lockedInvoice = SupplierInvoice::query()->whereKey($supplierInvoice->id)->lockForUpdate()->firstOrFail();[m
+[32m+[m[32m            Gate::forUser($user)->authorize('submit', $lockedInvoice);[m
+[32m+[m[32m            $lockedInvoice->load('items');[m
+[32m+[m[32m            $submittedBy = User::query()->whereKey($lockedInvoice->submitted_by)->lockForUpdate()->firstOrFail();[m
+[32m+[m[32m            $this->validatePersistedInvoice($lockedInvoice);[m
+[32m+[m[32m            [$items, $subtotal, $tax, $total] = $this->calculate([[m
+[32m+[m[32m                'items' => $lockedInvoice->items->map->only(['description', 'quantity', 'unit_price'])->all(),[m
+[32m+[m[32m                'tax_amount' => $lockedInvoice->tax_amount,[m
+[32m+[m[32m            ]);[m
+[32m+[m
+[32m+[m[32m            foreach ($lockedInvoice->items as $index => $item) {[m
+[32m+[m[32m                $item->forceFill(['quantity' => $items[$index]['quantity'], 'subtotal' => $items[$index]['subtotal']])->save();[m
+[32m+[m[32m            }[m
+[32m+[m
+[32m+[m[32m            $lockedInvoice->forceFill([[m
+[32m+[m[32m                'subtotal' => $subtotal->decimal(),[m
+[32m+[m[32m                'tax_amount' => $tax->decimal(),[m
+[32m+[m[32m                'total_amount' => $total->decimal(),[m
+[32m+[m[32m            ])->save();[m
+[32m+[m[32m            $context = WorkflowContext::fromValues([m
+[32m+[m[32m                WorkflowModuleType::SupplierInvoice,[m
+[32m+[m[32m                $submittedBy->id,[m
+[32m+[m[32m                $lockedInvoice->department_id,[m
+[32m+[m[32m                $lockedInvoice->category_id,[m
+[32m+[m[32m                $total->decimal(),[m
+[32m+[m[32m                $lockedInvoice->currency,[m
+[32m+[m[32m            );[m
+[32m+[m
+[32m+[m[32m            try {[m
+[32m+[m[32m                $resolution = $this->workflowResolver->resolve($context);[m
+[32m+[m[32m                $this->workflowEngine->start($lockedInvoice, $resolution);[m
+[32m+[m[32m            } catch (WorkflowResolutionException|ApprovalRuntimeException $exception) {[m
+[32m+[m[32m                throw ValidationException::withMessages(['workflow' => $exception->getMessage()]);[m
+[32m+[m[32m            }[m
+[32m+[m
+[32m+[m[32m            $lockedInvoice->forceFill([[m
+[32m+[m[32m                'status' => SupplierInvoiceStatus::InApproval,[m
+[32m+[m[32m                'submitted_at' => now(),[m
+[32m+[m[32m                'lock_version' => $lockedInvoice->lock_version + 1,[m
+[32m+[m[32m            ])->save();[m
+[32m+[m
+[32m+[m[32m            return $lockedInvoice->load(['items', 'approvalInstances.steps.assignments', 'approvalInstances.actions']);[m
+[32m+[m[32m        }, 5);[m
+[32m+[m[32m    }[m
+[32m+[m
+[32m+[m[32m    public function deleteDraft(SupplierInvoice $supplierInvoice, User $user): void[m
+[32m+[m[32m    {[m
+[32m+[m[32m        $files = DB::transaction(function () use ($supplierInvoice, $user): array {[m
+[32m+[m[32m            $lockedInvoice = SupplierInvoice::query()->whereKey($supplierInvoice->id)->lockForUpdate()->firstOrFail();[m
+[32m+[m[32m            Gate::forUser($user)->authorize('delete', $lockedInvoice);[m
+[32m+[m
+[32m+[m[32m            if ($lockedInvoice->approvalInstances()->exists()) {[m
+[32m+[m[32m                throw new AuthorizationException('Submitted supplier invoices cannot be deleted.');[m
+[32m+[m[32m            }[m
+[32m+[m
+[32m+[m[32m            $files = $lockedInvoice->attachments()->get(['id', 'disk', 'path'])[m
+[32m+[m[32m                ->map(fn ($attachment): array => ['disk' => $attachment->disk, 'path' => $attachment->path])[m
+[32m+[m[32m                ->all();[m
+[32m+[m[32m            $lockedInvoice->attachments()->delete();[m
+[32m+[m[32m            $lockedInvoice->items()->delete();[m
+[32m+[m[32m            $lockedInvoice->delete();[m
+[32m+[m
+[32m+[m[32m            return $files;[m
+[32m+[m[32m        }, 5);[m
+[32m+[m
+[32m+[m[32m        foreach ($files as $file) {[m
+[32m+[m[32m            Storage::disk($file['disk'])->delete($file['path']);[m
+[32m+[m[32m        }[m
+[32m+[m[32m    }[m
+[32m+[m
+[32m+[m[32m    /**[m
+[32m+[m[32m     * @param  array<string, mixed>  $attributes[m
+[32m+[m[32m     * @return array{int, int, int}[m
+[32m+[m[32m     */[m
+[32m+[m[32m    private function validateMasterData(array $attributes): array[m
+[32m+[m[32m    {[m
+[32m+[m[32m        $models = [[m
+[32m+[m[32m            'vendor_id' => ['table' => 'vendors', 'message' => 'Select an active vendor.'],[m
+[32m+[m[32m            'department_id' => ['table' => 'departments', 'message' => 'Select an active department.'],[m
+[32m+[m[32m            'category_id' => ['table' => 'spend_categories', 'message' => 'Select an active spend category.'],[m
+[32m+[m[32m        ];[m
+[32m+[m[32m        $ids = [];[m
+[32m+[m
+[32m+[m[32m        foreach ($models as $field => $configuration) {[m
+[32m+[m[32m            $id = (int) ($attributes[$field] ?? 0);[m
+[32m+[m
+[32m+[m[32m            if ($id < 1 || ! DB::table($configuration['table'])->where('id', $id)->where('status', MasterDataStatus::Active->value)->exists()) {[m
+[32m+[m[32m                throw ValidationException::withMessages([$field => $configuration['message']]);[m
+[32m+[m[32m            }[m
+[32m+[m
+[32m+[m[32m            $ids[] = $id;[m
+[32m+[m[32m        }[m
+[32m+[m
+[32m+[m[32m        return $ids;[m
+[32m+[m[32m    }[m
+[32m+[m
+[32m+[m[32m    private function normalizeInvoiceNumber(mixed $invoiceNumber): string[m
+[32m+[m[32m    {[m
+[32m+[m[32m        $normalized = Str::trim(is_string($invoiceNumber) ? $invoiceNumber : '');[m
+[32m+[m
+[32m+[m[32m        if ($normalized === '' || mb_strlen($normalized) > 100) {[m
+[32m+[m[32m            throw ValidationException::withMessages(['invoice_no' => 'Enter a valid supplier invoice number.']);[m
+[32m+[m[32m        }[m
+[32m+[m
+[32m+[m[32m        return $normalized;[m
+[32m+[m[32m    }[m
+[32m+[m
+[32m+[m[32m    private function ensureUniqueVendorInvoice(int $vendorId, string $invoiceNumber, ?int $ignoreId = null): void[m
+[32m+[m[32m    {[m
+[32m+[m[32m        $duplicate = SupplierInvoice::query()[m
+[32m+[m[32m            ->where('vendor_id', $vendorId)[m
+[32m+[m[32m            ->where('invoice_no', $invoiceNumber)[m
+[32m+[m[32m            ->when($ignoreId !== null, fn ($query) => $query->whereKeyNot($ignoreId))[m
+[32m+[m[32m            ->exists();[m
+[32m+[m
+[32m+[m[32m        if ($duplicate) {[m
+[32m+[m[32m            throw ValidationException::withMessages([[m
+[32m+[m[32m                'invoice_no' => 'This supplier invoice number already exists for the selected vendor.',[m
+[32m+[m[32m            ]);[m
+[32m+[m[32m        }[m
+[32m+[m[32m    }[m
+[32m+[m
+[32m+[m[32m    /**[m
+[32m+[m[32m     * @param  array<string, mixed>  $attributes[m
+[32m+[m[32m     * @return array{list<array{description: string, quantity: string, unit_price: string, subtotal: string}>, Money, Money, Money}[m
+[32m+[m[32m     */[m
+[32m+[m[32m    private function calculate(array $attributes): array[m
+[32m+[m[32m    {[m
+[32m+[m[32m        try {[m
+[32m+[m[32m            $items = [];[m
+[32m+[m[32m            $subtotals = [];[m
+[32m+[m
+[32m+[m[32m            foreach ($attributes['items'] as $item) {[m
+[32m+[m[32m                $quantity = $this->normalizeQuantity($item['quantity'] ?? null);[m
+[32m+[m[32m                $unitPrice = Money::of((string) ($item['unit_price'] ?? ''));[m
+[32m+[m
+[32m+[m[32m                if ($unitPrice->compare(0) <= 0) {[m
+[32m+[m[32m                    throw new InvalidArgumentException;[m
+[32m+[m[32m                }[m
+[32m+[m
+[32m+[m[32m                $itemSubtotal = $unitPrice->multiply($quantity);[m
+[32m+[m[32m                $subtotals[] = $itemSubtotal;[m
+[32m+[m[32m                $items[] = [[m
+[32m+[m[32m                    'description' => trim((string) ($item['description'] ?? '')),[m
+[32m+[m[32m                    'quantity' => $quantity,[m
+[32m+[m[32m                    'unit_price' => $unitPrice->decimal(),[m
+[32m+[m[32m                    'subtotal' => $itemSubtotal->decimal(),[m
+[32m+[m[32m                ];[m
+[32m+[m[32m            }[m
+[32m+[m
+[32m+[m[32m            if ($items === [] || collect($items)->contains(fn (array $item): bool => $item['description'] === '')) {[m
+[32m+[m[32m                throw new InvalidArgumentException;[m
+[32m+[m[32m            }[m
+[32m+[m
+[32m+[m[32m            $subtotal = Money::sum($subtotals);[m
+[32m+[m[32m            $tax = Money::of((string) ($attributes['tax_amount'] ?? ''));[m
+[32m+[m
+[32m+[m[32m            if ($tax->compare(0) < 0) {[m
+[32m+[m[32m                throw new InvalidArgumentException;[m
+[32m+[m[32m            }[m
+[32m+[m
+[32m+[m[32m            return [$items, $subtotal, $tax, $subtotal->add($tax)];[m
+[32m+[m[32m        } catch (InvalidArgumentException|OverflowException) {[m
+[32m+[m[32m            throw ValidationException::withMessages([[m
+[32m+[m[32m                'items' => 'The supplier invoice amounts or quantities are invalid or exceed the supported limit.',[m
+[32m+[m[32m            ]);[m
+[32m+[m[32m        }[m
+[32m+[m[32m    }[m
+[32m+[m
+[32m+[m[32m    private function normalizeQuantity(mixed $quantity): string[m
+[32m+[m[32m    {[m
+[32m+[m[32m        if ((! is_string($quantity) && ! is_int($quantity))[m
+[32m+[m[32m            || preg_match('/^(?<whole>\d{1,11})(?:\.(?<fraction>\d{1,4}))?$/', (string) $quantity, $matches) !== 1) {[m
+[32m+[m[32m            throw new InvalidArgumentException;[m
+[32m+[m[32m        }[m
+[32m+[m
+[32m+[m[32m        $whole = ltrim($matches['whole'], '0');[m
+[32m+[m[32m        $whole = $whole === '' ? '0' : $whole;[m
+[32m+[m[32m        $fraction = str_pad($matches['fraction'] ?? '', 4, '0');[m
+[32m+[m
+[32m+[m[32m        if ($whole === '0' && $fraction === '0000') {[m
+[32m+[m[32m            throw new InvalidArgumentException;[m
+[32m+[m[32m        }[m
+[32m+[m
+[32m+[m[32m        return $whole.'.'.$fraction;[m
+[32m+[m[32m    }[m
+[32m+[m
+[32m+[m[32m    private function validatePersistedInvoice(SupplierInvoice $invoice): void[m
+[32m+[m[32m    {[m
+[32m+[m[32m        $invoiceNumber = $this->normalizeInvoiceNumber($invoice->invoice_no);[m
+[32m+[m[32m        $this->validateMasterData([[m
+[32m+[m[32m            'vendor_id' => $invoice->vendor_id,[m
+[32m+[m[32m            'department_id' => $invoice->department_id,[m
+[32m+[m[32m            'category_id' => $invoice->category_id,[m
+[32m+[m[32m        ]);[m
+[32m+[m[32m        $this->ensureUniqueVendorInvoice($invoice->vendor_id, $invoiceNumber, $invoice->id);[m
+[32m+[m
+[32m+[m[32m        if (trim($invoice->description) === '' || $invoice->invoice_date === null[m
+[32m+[m[32m            || ($invoice->due_date !== null && $invoice->due_date->isBefore($invoice->invoice_date))) {[m
+[32m+[m[32m            throw ValidationException::withMessages(['supplier_invoice' => 'Complete the supplier invoice before submitting.']);[m
+[32m+[m[32m        }[m
+[32m+[m
+[32m+[m[32m        if (! $invoice->attachments()->exists()) {[m
+[32m+[m[32m            throw ValidationException::withMessages([[m
+[32m+[m[32m                'attachment' => 'Attach the supplier invoice document before submitting.',[m
+[32m+[m[32m            ]);[m
+[32m+[m[32m        }[m
+[32m+[m[32m    }[m
+[32m+[m
+[32m+[m[32m    private function throwIfVendorInvoiceConflict(QueryException $exception): void[m
+[32m+[m[32m    {[m
+[32m+[m[32m        $isIntegrityViolation = (string) ($exception->errorInfo[0] ?? '') === '23000';[m
+[32m+[m[32m        $identifiesVendorInvoiceConstraint = str_contains($exception->getMessage(), self::VENDOR_INVOICE_UNIQUE_INDEX)[m
+[32m+[m[32m            || str_contains($exception->getMessage(), 'supplier_invoices.vendor_id, supplier_invoices.invoice_no');[m
+[32m+[m
+[32m+[m[32m        if ($isIntegrityViolation && $identifiesVendorInvoiceConstraint) {[m
+[32m+[m[32m            throw ValidationException::withMessages([[m
+[32m+[m[32m                'invoice_no' => 'This supplier invoice number already exists for the selected vendor.',[m
+[32m+[m[32m            ]);[m
+[32m+[m[32m        }[m
+[32m+[m[32m    }[m
+[32m+[m[32m}[m
