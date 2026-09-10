@@ -23,6 +23,7 @@
         <aside class="app-sidebar bg-white border-end p-3">
             <nav aria-label="Main navigation" class="nav nav-pills flex-column">
                 <a class="nav-link {{ request()->routeIs('dashboard') ? 'active' : '' }}" href="{{ route('dashboard') }}">Dashboard</a>
+                <a class="nav-link {{ request()->routeIs('approvals.*') || request()->routeIs('approval-assignments.*') ? 'active' : '' }}" href="{{ route('approvals.index') }}">Approval inbox</a>
                 <a class="nav-link {{ request()->routeIs('purchase-requests.*') || request()->routeIs('purchase-request-attachments.*') ? 'active' : '' }}" href="{{ route('purchase-requests.index') }}">Purchase requests</a>
                 @can('viewAny', App\Models\SupplierInvoice::class)
                     <a class="nav-link {{ request()->routeIs('supplier-invoices.*') || request()->routeIs('supplier-invoice-attachments.*') ? 'active' : '' }}" href="{{ route('supplier-invoices.index') }}">Supplier invoices</a>

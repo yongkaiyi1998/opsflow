@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\ApprovalController;
 use App\Http\Controllers\AttachmentController;
 use App\Http\Controllers\Auth\AuthenticatedSessionController;
 use App\Http\Controllers\Auth\NewPasswordController;
@@ -40,6 +41,11 @@ Route::middleware(['auth', 'auth.session', 'active'])->group(function (): void {
     Route::view('/dashboard', 'dashboard')->name('dashboard');
     Route::get('/attachments/{attachment}/download', [AttachmentController::class, 'download'])->name('attachments.download');
     Route::delete('/attachments/{attachment}', [AttachmentController::class, 'destroy'])->name('attachments.destroy');
+    Route::get('/approvals', [ApprovalController::class, 'index'])->name('approvals.index');
+    Route::get('/approvals/{approval_assignment}', [ApprovalController::class, 'show'])->name('approvals.show');
+    Route::post('/approval-assignments/{approval_assignment}/approve', [ApprovalController::class, 'approve'])->name('approval-assignments.approve');
+    Route::post('/approval-assignments/{approval_assignment}/reject', [ApprovalController::class, 'reject'])->name('approval-assignments.reject');
+    Route::post('/approval-assignments/{approval_assignment}/request-changes', [ApprovalController::class, 'requestChanges'])->name('approval-assignments.request-changes');
     Route::resource('purchase-requests', PurchaseRequestController::class);
     Route::post('purchase-requests/{purchase_request}/submit', [PurchaseRequestSubmissionController::class, 'store'])->name('purchase-requests.submit');
     Route::post('purchase-requests/{purchase_request}/attachments', [PurchaseRequestAttachmentController::class, 'store'])->name('purchase-request-attachments.store');
