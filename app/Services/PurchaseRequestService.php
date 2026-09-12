@@ -6,6 +6,7 @@ use App\Exceptions\ApprovalRuntimeException;
 use App\Exceptions\WorkflowResolutionException;
 use App\MasterDataStatus;
 use App\Models\PurchaseRequest;
+use App\Models\PurchaseRequestItem;
 use App\Models\User;
 use App\PurchaseRequestStatus;
 use App\ReferenceType;
@@ -27,6 +28,7 @@ class PurchaseRequestService
         private readonly ReferenceNumberGenerator $referenceNumbers,
         private readonly WorkflowResolver $workflowResolver,
         private readonly WorkflowEngine $workflowEngine,
+        private readonly ApprovalService $approvalService,
     ) {}
 
     /** @param array<string, mixed> $attributes */
@@ -144,6 +146,49 @@ class PurchaseRequestService
                 'submitted_at' => now(),
                 'lock_version' => $lockedRequest->lock_version + 1,
             ])->save();
+
+            return $lockedRequest->load(['items', 'approvalInstances.steps.assignments', 'approvalInstances.actions']);
+        }, 5);
+    }
+
+    public function resubmit(PurchaseRequest $purchaseRequest, User $user, ?string $comment = null): PurchaseRequest
+    {
+        return DB::transaction(function () use ($purchaseRequest, $user, $comment): PurchaseRequest {
+            $lockedRequest = PurchaseRequest::query()->whereKey($purchaseRequest->id)->lockForUpdate()->firstOrFail();
+            Gate::forUser($user)->authorize('resubmit', $lockedRequest);
+            $items = PurchaseRequestItem::query()
+                ->where('purchase_request_id', $lockedRequest->id)
+                ->orderBy('id')
+                ->lockForUpdate()
+                ->get();
+            $lockedRequest->setRelation('items', $items);
+            $requester = User::query()->whereKey($lockedRequest->requester_id)->lockForUpdate()->firstOrFail();
+            $departmentId = $this->validDepartmentId($requester);
+            $this->validatePersistedRequest($lockedRequest);
+            [$normalizedItems, $subtotal, $tax, $total] = $this->calculate([
+                'items' => $items->map->only(['description', 'quantity', 'unit_price'])->all(),
+                'tax_amount' => $lockedRequest->tax_amount,
+            ]);
+
+            foreach ($items as $index => $item) {
+                $item->forceFill(['subtotal' => $normalizedItems[$index]['subtotal']])->save();
+            }
+
+            $lockedRequest->forceFill([
+                'department_id' => $departmentId,
+                'subtotal' => $subtotal->decimal(),
+                'tax_amount' => $tax->decimal(),
+                'total_amount' => $total->decimal(),
+            ])->save();
+            $context = WorkflowContext::fromValues(
+                WorkflowModuleType::PurchaseRequest,
+                $requester->id,
+                $departmentId,
+                $lockedRequest->category_id,
+                $total->decimal(),
+                $lockedRequest->currency,
+            );
+            $this->approvalService->resubmit($lockedRequest, $user, $context, $comment);
 
             return $lockedRequest->load(['items', 'approvalInstances.steps.assignments', 'approvalInstances.actions']);
         }, 5);

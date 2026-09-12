@@ -6,6 +6,7 @@ use App\Exceptions\ApprovalRuntimeException;
 use App\Exceptions\WorkflowResolutionException;
 use App\MasterDataStatus;
 use App\Models\SupplierInvoice;
+use App\Models\SupplierInvoiceItem;
 use App\Models\User;
 use App\ReferenceType;
 use App\SupplierInvoiceStatus;
@@ -30,6 +31,7 @@ class SupplierInvoiceService
         private readonly ReferenceNumberGenerator $referenceNumbers,
         private readonly WorkflowResolver $workflowResolver,
         private readonly WorkflowEngine $workflowEngine,
+        private readonly ApprovalService $approvalService,
     ) {}
 
     /** @param array<string, mixed> $attributes */
@@ -161,6 +163,51 @@ class SupplierInvoiceService
                 'submitted_at' => now(),
                 'lock_version' => $lockedInvoice->lock_version + 1,
             ])->save();
+
+            return $lockedInvoice->load(['items', 'approvalInstances.steps.assignments', 'approvalInstances.actions']);
+        }, 5);
+    }
+
+    public function resubmit(SupplierInvoice $supplierInvoice, User $user, ?string $comment = null): SupplierInvoice
+    {
+        return DB::transaction(function () use ($supplierInvoice, $user, $comment): SupplierInvoice {
+            $lockedInvoice = SupplierInvoice::query()->whereKey($supplierInvoice->id)->lockForUpdate()->firstOrFail();
+            Gate::forUser($user)->authorize('resubmit', $lockedInvoice);
+            $items = SupplierInvoiceItem::query()
+                ->where('supplier_invoice_id', $lockedInvoice->id)
+                ->orderBy('id')
+                ->lockForUpdate()
+                ->get();
+            $lockedInvoice->setRelation('items', $items);
+            $lockedInvoice->setRelation('attachments', $lockedInvoice->attachments()->lockForUpdate()->get());
+            $submittedBy = User::query()->whereKey($lockedInvoice->submitted_by)->lockForUpdate()->firstOrFail();
+            $this->validatePersistedInvoice($lockedInvoice);
+            [$normalizedItems, $subtotal, $tax, $total] = $this->calculate([
+                'items' => $items->map->only(['description', 'quantity', 'unit_price'])->all(),
+                'tax_amount' => $lockedInvoice->tax_amount,
+            ]);
+
+            foreach ($items as $index => $item) {
+                $item->forceFill([
+                    'quantity' => $normalizedItems[$index]['quantity'],
+                    'subtotal' => $normalizedItems[$index]['subtotal'],
+                ])->save();
+            }
+
+            $lockedInvoice->forceFill([
+                'subtotal' => $subtotal->decimal(),
+                'tax_amount' => $tax->decimal(),
+                'total_amount' => $total->decimal(),
+            ])->save();
+            $context = WorkflowContext::fromValues(
+                WorkflowModuleType::SupplierInvoice,
+                $submittedBy->id,
+                $lockedInvoice->department_id,
+                $lockedInvoice->category_id,
+                $total->decimal(),
+                $lockedInvoice->currency,
+            );
+            $this->approvalService->resubmit($lockedInvoice, $user, $context, $comment);
 
             return $lockedInvoice->load(['items', 'approvalInstances.steps.assignments', 'approvalInstances.actions']);
         }, 5);
@@ -323,7 +370,11 @@ class SupplierInvoiceService
             throw ValidationException::withMessages(['supplier_invoice' => 'Complete the supplier invoice before submitting.']);
         }
 
-        if (! $invoice->attachments()->exists()) {
+        $hasAttachment = $invoice->relationLoaded('attachments')
+            ? $invoice->attachments->isNotEmpty()
+            : $invoice->attachments()->exists();
+
+        if (! $hasAttachment) {
             throw ValidationException::withMessages([
                 'attachment' => 'Attach the supplier invoice document before submitting.',
             ]);

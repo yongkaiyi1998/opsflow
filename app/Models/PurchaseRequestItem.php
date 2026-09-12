@@ -41,7 +41,10 @@ class PurchaseRequestItem extends Model
 
     private function ensureDraftRequest(): void
     {
-        if (! PurchaseRequest::query()->whereKey($this->purchase_request_id)->where('status', PurchaseRequestStatus::Draft->value)->exists()) {
+        if (! PurchaseRequest::query()
+            ->whereKey($this->purchase_request_id)
+            ->whereIn('status', [PurchaseRequestStatus::Draft->value, PurchaseRequestStatus::ChangesRequested->value])
+            ->exists()) {
             throw new LogicException('Submitted purchase request items cannot be changed.');
         }
     }

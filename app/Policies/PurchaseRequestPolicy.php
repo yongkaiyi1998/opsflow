@@ -41,8 +41,9 @@ class PurchaseRequestPolicy
      */
     public function update(User $user, PurchaseRequest $purchaseRequest): bool
     {
-        return $purchaseRequest->requester_id === $user->id
-            && $purchaseRequest->status === PurchaseRequestStatus::Draft;
+        return $user->isActive()
+            && $purchaseRequest->requester_id === $user->id
+            && in_array($purchaseRequest->status, [PurchaseRequestStatus::Draft, PurchaseRequestStatus::ChangesRequested], true);
     }
 
     /**
@@ -50,13 +51,31 @@ class PurchaseRequestPolicy
      */
     public function delete(User $user, PurchaseRequest $purchaseRequest): bool
     {
-        return $this->update($user, $purchaseRequest)
+        return $user->isActive()
+            && $purchaseRequest->requester_id === $user->id
+            && $purchaseRequest->status === PurchaseRequestStatus::Draft
             && ! $purchaseRequest->approvalInstances()->exists();
     }
 
     public function submit(User $user, PurchaseRequest $purchaseRequest): bool
     {
-        return $this->update($user, $purchaseRequest);
+        return $user->isActive()
+            && $purchaseRequest->requester_id === $user->id
+            && $purchaseRequest->status === PurchaseRequestStatus::Draft;
+    }
+
+    public function resubmit(User $user, PurchaseRequest $purchaseRequest): bool
+    {
+        return $user->isActive()
+            && $purchaseRequest->requester_id === $user->id
+            && $purchaseRequest->status === PurchaseRequestStatus::ChangesRequested;
+    }
+
+    public function withdraw(User $user, PurchaseRequest $purchaseRequest): bool
+    {
+        return $user->isActive()
+            && $purchaseRequest->requester_id === $user->id
+            && in_array($purchaseRequest->status, [PurchaseRequestStatus::InApproval, PurchaseRequestStatus::ChangesRequested], true);
     }
 
     public function addAttachment(User $user, PurchaseRequest $purchaseRequest): bool

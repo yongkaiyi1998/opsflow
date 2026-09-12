@@ -91,7 +91,7 @@ class SupplierInvoiceController extends Controller
         $supplierInvoice->load([
             'vendor', 'department', 'category', 'submittedBy', 'items', 'attachments.uploadedBy',
             'approvalInstances.workflowVersion', 'approvalInstances.workflowRuleGroup',
-            'approvalInstances.steps.assignments.approver', 'approvalInstances.actions.actor',
+            'approvalInstances.steps.assignments.approver', 'approvalInstances.actions.actor', 'approvalInstances.actions.step',
         ]);
 
         return view('supplier-invoices.show', compact('supplierInvoice'));

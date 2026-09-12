@@ -81,7 +81,7 @@ class ExpenseClaimController extends Controller
         $expenseClaim->load([
             'employee', 'department', 'items.category', 'items.attachments.uploadedBy',
             'approvalInstances.workflowVersion', 'approvalInstances.workflowRuleGroup',
-            'approvalInstances.steps.assignments.approver', 'approvalInstances.actions.actor',
+            'approvalInstances.steps.assignments.approver', 'approvalInstances.actions.actor', 'approvalInstances.actions.step',
         ]);
 
         return view('expense-claims.show', compact('expenseClaim'));

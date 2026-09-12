@@ -45,7 +45,7 @@ class SupplierInvoicePolicy
     public function update(User $user, SupplierInvoice $supplierInvoice): bool
     {
         return $this->canManage($user)
-            && $supplierInvoice->status === SupplierInvoiceStatus::Draft;
+            && in_array($supplierInvoice->status, [SupplierInvoiceStatus::Draft, SupplierInvoiceStatus::ChangesRequested], true);
     }
 
     /**
@@ -53,13 +53,27 @@ class SupplierInvoicePolicy
      */
     public function delete(User $user, SupplierInvoice $supplierInvoice): bool
     {
-        return $this->update($user, $supplierInvoice)
+        return $this->canManage($user)
+            && $supplierInvoice->status === SupplierInvoiceStatus::Draft
             && ! $supplierInvoice->approvalInstances()->exists();
     }
 
     public function submit(User $user, SupplierInvoice $supplierInvoice): bool
     {
-        return $this->update($user, $supplierInvoice);
+        return $this->canManage($user)
+            && $supplierInvoice->status === SupplierInvoiceStatus::Draft;
+    }
+
+    public function resubmit(User $user, SupplierInvoice $supplierInvoice): bool
+    {
+        return $this->canManage($user)
+            && $supplierInvoice->status === SupplierInvoiceStatus::ChangesRequested;
+    }
+
+    public function withdraw(User $user, SupplierInvoice $supplierInvoice): bool
+    {
+        return $this->canManage($user)
+            && in_array($supplierInvoice->status, [SupplierInvoiceStatus::InApproval, SupplierInvoiceStatus::ChangesRequested], true);
     }
 
     public function addAttachment(User $user, SupplierInvoice $supplierInvoice): bool

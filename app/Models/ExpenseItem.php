@@ -49,7 +49,10 @@ class ExpenseItem extends Model
 
     private function ensureDraftClaim(): void
     {
-        if (! ExpenseClaim::query()->whereKey($this->expense_claim_id)->where('status', ExpenseClaimStatus::Draft->value)->exists()) {
+        if (! ExpenseClaim::query()
+            ->whereKey($this->expense_claim_id)
+            ->whereIn('status', [ExpenseClaimStatus::Draft->value, ExpenseClaimStatus::ChangesRequested->value])
+            ->exists()) {
             throw new LogicException('Submitted expense claim items cannot be changed.');
         }
     }

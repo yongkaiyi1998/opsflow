@@ -26,6 +26,27 @@ class WorkflowEngine
 {
     public function __construct(private readonly ApproverResolver $approverResolver) {}
 
+    public function validateStart(Model $approvable, WorkflowResolution $resolution): void
+    {
+        if (! $approvable->exists || $approvable->getKey() === null) {
+            throw ApprovalRuntimeException::invalidResolution();
+        }
+
+        [, $group] = $this->authoritativeRoute($resolution);
+        $requesterExists = User::query()
+            ->whereKey($resolution->context->requesterId)
+            ->where('status', UserStatus::Active->value)
+            ->exists();
+
+        if (! $requesterExists) {
+            throw ApprovalRuntimeException::invalidResolution();
+        }
+
+        $steps = $group->steps;
+        $this->validateSteps($steps->all());
+        $this->approverResolver->resolve($steps->first(), $resolution->context);
+    }
+
     public function start(Model $approvable, WorkflowResolution $resolution): ApprovalInstance
     {
         if (! $approvable->exists || $approvable->getKey() === null) {

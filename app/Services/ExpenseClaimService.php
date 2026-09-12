@@ -28,6 +28,7 @@ class ExpenseClaimService
         private readonly ReferenceNumberGenerator $referenceNumbers,
         private readonly WorkflowResolver $workflowResolver,
         private readonly WorkflowEngine $workflowEngine,
+        private readonly ApprovalService $approvalService,
     ) {}
 
     /** @param array<string, mixed> $attributes */
@@ -180,6 +181,58 @@ class ExpenseClaimService
                 'submitted_at' => now(),
                 'lock_version' => $claim->lock_version + 1,
             ])->save();
+
+            return $claim->load(['items.attachments', 'approvalInstances.steps.assignments', 'approvalInstances.actions']);
+        }, 5);
+    }
+
+    public function resubmit(ExpenseClaim $expenseClaim, User $user, ?string $comment = null): ExpenseClaim
+    {
+        return DB::transaction(function () use ($expenseClaim, $user, $comment): ExpenseClaim {
+            $claim = ExpenseClaim::query()->whereKey($expenseClaim->id)->lockForUpdate()->firstOrFail();
+            $employee = User::query()->whereKey($claim->employee_id)->lockForUpdate()->firstOrFail();
+            Gate::forUser($employee)->authorize('resubmit', $claim);
+
+            if ($employee->id !== $user->id) {
+                throw new AuthorizationException;
+            }
+
+            $departmentId = $this->validateEmployeeDepartment($employee, true);
+            $items = ExpenseItem::query()
+                ->where('expense_claim_id', $claim->id)
+                ->orderBy('id')
+                ->lockForUpdate()
+                ->get();
+            $items->load('category');
+
+            foreach ($items as $item) {
+                $item->setRelation('attachments', $item->attachments()->lockForUpdate()->get());
+            }
+
+            $this->validatePersistedClaim($claim, $items);
+            [$normalizedItems, $total] = $this->normalizeItems($items->map->only([
+                'category_id', 'expense_date', 'merchant', 'description', 'amount', 'tax_amount', 'receipt_required',
+            ])->all(), preserveReceiptRequirement: true);
+            $this->validateCategories($normalizedItems, true);
+
+            foreach ($items as $index => $item) {
+                $item->forceFill($normalizedItems[$index])->save();
+            }
+
+            $routingItem = $this->routingItem($items);
+            $claim->forceFill([
+                'department_id' => $departmentId,
+                'total_amount' => $total->decimal(),
+            ])->save();
+            $context = WorkflowContext::fromValues(
+                WorkflowModuleType::ExpenseClaim,
+                $employee->id,
+                $departmentId,
+                $routingItem->category_id,
+                $total->decimal(),
+                $claim->currency,
+            );
+            $this->approvalService->resubmit($claim, $user, $context, $comment);
 
             return $claim->load(['items.attachments', 'approvalInstances.steps.assignments', 'approvalInstances.actions']);
         }, 5);

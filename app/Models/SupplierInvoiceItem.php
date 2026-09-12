@@ -42,7 +42,10 @@ class SupplierInvoiceItem extends Model
 
     private function ensureDraftInvoice(): void
     {
-        if (! SupplierInvoice::query()->whereKey($this->supplier_invoice_id)->where('status', SupplierInvoiceStatus::Draft->value)->exists()) {
+        if (! SupplierInvoice::query()
+            ->whereKey($this->supplier_invoice_id)
+            ->whereIn('status', [SupplierInvoiceStatus::Draft->value, SupplierInvoiceStatus::ChangesRequested->value])
+            ->exists()) {
             throw new LogicException('Submitted supplier invoice items cannot be changed.');
         }
     }

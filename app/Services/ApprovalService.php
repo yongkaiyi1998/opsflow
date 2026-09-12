@@ -8,6 +8,7 @@ use App\ApprovalInstanceStatus;
 use App\ApprovalMode;
 use App\ApprovalStepStatus;
 use App\Exceptions\ApprovalRuntimeException;
+use App\Exceptions\WorkflowResolutionException;
 use App\Models\ApprovalAssignment;
 use App\Models\ApprovalInstance;
 use App\Models\ApprovalStepInstance;
@@ -15,7 +16,11 @@ use App\Models\ExpenseClaim;
 use App\Models\PurchaseRequest;
 use App\Models\SupplierInvoice;
 use App\Models\User;
+use App\Support\Money;
 use App\UserStatus;
+use App\WorkflowContext;
+use App\WorkflowModuleType;
+use App\WorkflowResolution;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\DB;
@@ -24,7 +29,11 @@ use Illuminate\Validation\ValidationException;
 
 class ApprovalService
 {
-    public function __construct(private readonly ApproverResolver $approverResolver) {}
+    public function __construct(
+        private readonly ApproverResolver $approverResolver,
+        private readonly WorkflowResolver $workflowResolver,
+        private readonly WorkflowEngine $workflowEngine,
+    ) {}
 
     public function approve(ApprovalAssignment $assignment, User $actor, ?string $comment = null): ApprovalInstance
     {
@@ -39,6 +48,113 @@ class ApprovalService
     public function requestChanges(ApprovalAssignment $assignment, User $actor, string $comment): ApprovalInstance
     {
         return $this->perform($assignment, $actor, ApprovalActionType::ChangesRequested, $comment);
+    }
+
+    public function resubmit(
+        Model $business,
+        User $actor,
+        WorkflowContext $context,
+        ?string $comment = null,
+    ): ApprovalInstance {
+        $this->ensureSupportedBusiness($business);
+        Gate::forUser($actor)->authorize('resubmit', $business);
+        $comment = $this->normalizeLifecycleComment($comment);
+
+        try {
+            return DB::transaction(function () use ($business, $actor, $context, $comment): ApprovalInstance {
+                $lockedBusiness = $business->newQuery()
+                    ->whereKey($business->getKey())
+                    ->lockForUpdate()
+                    ->firstOrFail();
+                $lockedActor = User::query()->whereKey($actor->id)->lockForUpdate()->firstOrFail();
+                Gate::forUser($lockedActor)->authorize('resubmit', $lockedBusiness);
+                $this->validateResubmissionContext($lockedBusiness, $context);
+
+                [$instance, $steps, $assignments] = $this->lockActiveRuntime($lockedBusiness);
+                $currentStep = $steps->firstWhere('step_order', $instance->current_step_order);
+
+                if (! $currentStep instanceof ApprovalStepInstance
+                    || $currentStep->status !== ApprovalStepStatus::Active
+                    || $assignments->where('status', ApprovalAssignmentStatus::Pending)->isNotEmpty()) {
+                    throw $this->staleLifecycleAction();
+                }
+
+                $routingChanged = $this->routingChanged($instance->context(), $context);
+                $resolution = $routingChanged ? $this->workflowResolver->resolve($context) : null;
+
+                if ($resolution !== null && $this->routeChanged($instance, $resolution)) {
+                    $this->workflowEngine->validateStart($lockedBusiness, $resolution);
+                    $transitionedAt = now();
+                    $this->cancelRuntime($instance, $steps, $assignments, $transitionedAt);
+                    $newInstance = $this->workflowEngine->start($lockedBusiness, $resolution);
+                    $resubmittedAt = now();
+                    $newInstance->actions()->create([
+                        'actor_id' => $lockedActor->id,
+                        'action' => ApprovalActionType::Resubmitted,
+                        'comment' => $comment,
+                        'metadata' => [
+                            'routing_changed' => true,
+                            'previous_approval_instance_id' => $instance->id,
+                            'new_approval_instance_id' => $newInstance->id,
+                        ],
+                        'created_at' => $resubmittedAt,
+                    ]);
+                    $this->updateBusinessStatus($lockedBusiness, 'IN_APPROVAL', null, $resubmittedAt);
+
+                    return $newInstance->load(['approvable', 'steps.assignments.approver', 'actions.actor']);
+                }
+
+                $this->resumeRuntime(
+                    $lockedBusiness,
+                    $instance,
+                    $currentStep,
+                    $context,
+                    $lockedActor,
+                    $comment,
+                    $routingChanged,
+                );
+
+                return $instance->load(['approvable', 'steps.assignments.approver', 'actions.actor']);
+            }, 5);
+        } catch (WorkflowResolutionException|ApprovalRuntimeException $exception) {
+            throw ValidationException::withMessages(['workflow' => $exception->getMessage()]);
+        }
+    }
+
+    public function withdraw(Model $business, User $actor, ?string $comment = null): ApprovalInstance
+    {
+        $this->ensureSupportedBusiness($business);
+        Gate::forUser($actor)->authorize('withdraw', $business);
+        $comment = $this->normalizeLifecycleComment($comment);
+
+        return DB::transaction(function () use ($business, $actor, $comment): ApprovalInstance {
+            $lockedBusiness = $business->newQuery()
+                ->whereKey($business->getKey())
+                ->lockForUpdate()
+                ->firstOrFail();
+            $lockedActor = User::query()->whereKey($actor->id)->lockForUpdate()->firstOrFail();
+            Gate::forUser($lockedActor)->authorize('withdraw', $lockedBusiness);
+            [$instance, $steps, $assignments] = $this->lockActiveRuntime($lockedBusiness);
+            $currentStep = $steps->firstWhere('step_order', $instance->current_step_order);
+
+            if (! $currentStep instanceof ApprovalStepInstance
+                || $currentStep->status !== ApprovalStepStatus::Active) {
+                throw $this->staleLifecycleAction();
+            }
+
+            $transitionedAt = now();
+            $this->cancelRuntime($instance, $steps, $assignments, $transitionedAt);
+            $instance->actions()->create([
+                'approval_step_instance_id' => $currentStep->id,
+                'actor_id' => $lockedActor->id,
+                'action' => ApprovalActionType::Withdrawn,
+                'comment' => $comment,
+                'created_at' => $transitionedAt,
+            ]);
+            $this->updateBusinessStatus($lockedBusiness, 'WITHDRAWN', 'withdrawn_at', $transitionedAt);
+
+            return $instance->load(['approvable', 'steps.assignments.approver', 'actions.actor']);
+        }, 5);
     }
 
     private function perform(
@@ -393,6 +509,200 @@ class ApprovalService
         $business->forceFill($attributes)->save();
     }
 
+    private function ensureSupportedBusiness(Model $business): void
+    {
+        if (! $business instanceof PurchaseRequest
+            && ! $business instanceof SupplierInvoice
+            && ! $business instanceof ExpenseClaim) {
+            throw ValidationException::withMessages([
+                'action' => 'This action does not belong to a supported business record.',
+            ]);
+        }
+    }
+
+    private function validateResubmissionContext(Model $business, WorkflowContext $context): void
+    {
+        $expected = match (true) {
+            $business instanceof PurchaseRequest => [
+                WorkflowModuleType::PurchaseRequest,
+                (int) $business->requester_id,
+                (int) $business->department_id,
+            ],
+            $business instanceof SupplierInvoice => [
+                WorkflowModuleType::SupplierInvoice,
+                (int) $business->submitted_by,
+                (int) $business->department_id,
+            ],
+            $business instanceof ExpenseClaim => [
+                WorkflowModuleType::ExpenseClaim,
+                (int) $business->employee_id,
+                (int) $business->department_id,
+            ],
+            default => throw new \LogicException('Unsupported business record.'),
+        };
+        $requester = User::query()
+            ->whereKey($context->requesterId)
+            ->where('status', UserStatus::Active->value)
+            ->lockForUpdate()
+            ->first();
+
+        if ((string) $business->getRawOriginal('status') !== 'CHANGES_REQUESTED'
+            || $requester === null
+            || $context->moduleType !== $expected[0]
+            || $context->requesterId !== $expected[1]
+            || $context->departmentId !== $expected[2]
+            || $context->amount->compare(Money::of((string) $business->getAttribute('total_amount'))) !== 0
+            || $context->currency !== (string) $business->getAttribute('currency')) {
+            throw $this->staleLifecycleAction();
+        }
+
+        if (($business instanceof PurchaseRequest || $business instanceof SupplierInvoice)
+            && $context->categoryId !== (int) $business->getAttribute('category_id')) {
+            throw $this->staleLifecycleAction();
+        }
+    }
+
+    /**
+     * @return array{
+     *     ApprovalInstance,
+     *     Collection<int, ApprovalStepInstance>,
+     *     Collection<int, ApprovalAssignment>
+     * }
+     */
+    private function lockActiveRuntime(Model $business): array
+    {
+        $instances = ApprovalInstance::query()
+            ->where('approvable_type', $business->getMorphClass())
+            ->where('approvable_id', $business->getKey())
+            ->whereIn('status', [ApprovalInstanceStatus::InProgress->value, ApprovalInstanceStatus::Blocked->value])
+            ->orderBy('id')
+            ->lockForUpdate()
+            ->get();
+
+        if ($instances->count() !== 1) {
+            throw $this->staleLifecycleAction();
+        }
+
+        $instance = $instances->sole();
+        $steps = ApprovalStepInstance::query()
+            ->where('approval_instance_id', $instance->id)
+            ->orderBy('step_order')
+            ->lockForUpdate()
+            ->get();
+        $assignments = ApprovalAssignment::query()
+            ->whereIn('approval_step_instance_id', $steps->modelKeys())
+            ->orderBy('id')
+            ->lockForUpdate()
+            ->get();
+
+        if ($instance->status !== ApprovalInstanceStatus::InProgress
+            || $instance->current_step_order === null) {
+            throw $this->staleLifecycleAction();
+        }
+
+        return [$instance, $steps, $assignments];
+    }
+
+    private function routingChanged(WorkflowContext $original, WorkflowContext $current): bool
+    {
+        return $original->amount->compare($current->amount) !== 0
+            || $original->departmentId !== $current->departmentId
+            || $original->categoryId !== $current->categoryId;
+    }
+
+    private function routeChanged(ApprovalInstance $instance, WorkflowResolution $resolution): bool
+    {
+        return $instance->workflow_version_id !== $resolution->version->id
+            || $instance->workflow_rule_group_id !== $resolution->ruleGroup->id;
+    }
+
+    /**
+     * @param  Collection<int, ApprovalStepInstance>  $steps
+     * @param  Collection<int, ApprovalAssignment>  $assignments
+     */
+    private function cancelRuntime(
+        ApprovalInstance $instance,
+        Collection $steps,
+        Collection $assignments,
+        \DateTimeInterface $transitionedAt,
+    ): void {
+        foreach ($assignments->where('status', ApprovalAssignmentStatus::Pending) as $assignment) {
+            $assignment->forceFill(['status' => ApprovalAssignmentStatus::Cancelled])->save();
+        }
+
+        foreach ($steps as $step) {
+            if (in_array($step->status, [ApprovalStepStatus::Active, ApprovalStepStatus::Waiting], true)) {
+                $step->forceFill([
+                    'status' => ApprovalStepStatus::Cancelled,
+                    'completed_at' => $transitionedAt,
+                ])->save();
+            }
+        }
+
+        $instance->forceFill([
+            'status' => ApprovalInstanceStatus::Cancelled,
+            'current_step_order' => null,
+            'completed_at' => $transitionedAt,
+        ])->save();
+    }
+
+    private function resumeRuntime(
+        Model $business,
+        ApprovalInstance $instance,
+        ApprovalStepInstance $currentStep,
+        WorkflowContext $context,
+        User $actor,
+        ?string $comment,
+        bool $routingChanged,
+    ): void {
+        $transitionedAt = now();
+        $approvers = $this->approverResolver->resolve($currentStep, $context);
+        $lockedApprovers = User::query()
+            ->whereKey($approvers->modelKeys())
+            ->orderBy('id')
+            ->lockForUpdate()
+            ->get();
+
+        if ($lockedApprovers->count() !== $approvers->count()
+            || $lockedApprovers->contains(fn (User $user): bool => $user->status !== UserStatus::Active
+                || $user->id === $context->requesterId)) {
+            throw ApprovalRuntimeException::unavailableApprover();
+        }
+
+        foreach ($lockedApprovers as $approver) {
+            $currentStep->assignments()->create([
+                'approver_id' => $approver->id,
+                'status' => ApprovalAssignmentStatus::Pending,
+                'assigned_at' => $transitionedAt,
+            ]);
+        }
+
+        $instance->forceFill([
+            'workflow_context' => $context->snapshot(),
+            'status' => ApprovalInstanceStatus::InProgress,
+        ])->save();
+        $instance->actions()->create([
+            'approval_step_instance_id' => $currentStep->id,
+            'actor_id' => $actor->id,
+            'action' => ApprovalActionType::Resubmitted,
+            'comment' => $comment,
+            'metadata' => ['routing_changed' => $routingChanged],
+            'created_at' => $transitionedAt,
+        ]);
+        $this->updateBusinessStatus($business, 'IN_APPROVAL', null, $transitionedAt);
+    }
+
+    private function normalizeLifecycleComment(?string $comment): ?string
+    {
+        $comment = trim((string) $comment);
+
+        if (mb_strlen($comment) > 2000) {
+            throw ValidationException::withMessages(['comment' => 'The comment may not be greater than 2000 characters.']);
+        }
+
+        return $comment === '' ? null : $comment;
+    }
+
     private function normalizeComment(ApprovalActionType $action, ?string $comment): ?string
     {
         $comment = trim((string) $comment);
@@ -413,6 +723,13 @@ class ApprovalService
     {
         return ValidationException::withMessages([
             'action' => 'This approval is no longer actionable. Refresh the page to see its current state.',
+        ]);
+    }
+
+    private function staleLifecycleAction(): ValidationException
+    {
+        return ValidationException::withMessages([
+            'action' => 'This request can no longer be changed in that way. Refresh the page to see its current state.',
         ]);
     }
 }

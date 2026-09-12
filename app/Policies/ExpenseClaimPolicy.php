@@ -37,18 +37,36 @@ class ExpenseClaimPolicy
     {
         return $user->isActive()
             && $expenseClaim->employee_id === $user->id
-            && $expenseClaim->status === ExpenseClaimStatus::Draft;
+            && in_array($expenseClaim->status, [ExpenseClaimStatus::Draft, ExpenseClaimStatus::ChangesRequested], true);
     }
 
     public function delete(User $user, ExpenseClaim $expenseClaim): bool
     {
-        return $this->update($user, $expenseClaim)
+        return $user->isActive()
+            && $expenseClaim->employee_id === $user->id
+            && $expenseClaim->status === ExpenseClaimStatus::Draft
             && ! $expenseClaim->approvalInstances()->exists();
     }
 
     public function submit(User $user, ExpenseClaim $expenseClaim): bool
     {
-        return $this->update($user, $expenseClaim);
+        return $user->isActive()
+            && $expenseClaim->employee_id === $user->id
+            && $expenseClaim->status === ExpenseClaimStatus::Draft;
+    }
+
+    public function resubmit(User $user, ExpenseClaim $expenseClaim): bool
+    {
+        return $user->isActive()
+            && $expenseClaim->employee_id === $user->id
+            && $expenseClaim->status === ExpenseClaimStatus::ChangesRequested;
+    }
+
+    public function withdraw(User $user, ExpenseClaim $expenseClaim): bool
+    {
+        return $user->isActive()
+            && $expenseClaim->employee_id === $user->id
+            && in_array($expenseClaim->status, [ExpenseClaimStatus::InApproval, ExpenseClaimStatus::ChangesRequested], true);
     }
 
     public function addAttachment(User $user, ExpenseClaim $expenseClaim): bool

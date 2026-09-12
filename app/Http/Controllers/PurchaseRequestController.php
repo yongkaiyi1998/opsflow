@@ -85,7 +85,7 @@ class PurchaseRequestController extends Controller
         $purchaseRequest->load([
             'requester', 'department', 'category', 'vendor', 'items', 'attachments.uploadedBy',
             'approvalInstances.workflowVersion', 'approvalInstances.workflowRuleGroup',
-            'approvalInstances.steps.assignments.approver', 'approvalInstances.actions.actor',
+            'approvalInstances.steps.assignments.approver', 'approvalInstances.actions.actor', 'approvalInstances.actions.step',
         ]);
 
         return view('purchase-requests.show', compact('purchaseRequest'));
