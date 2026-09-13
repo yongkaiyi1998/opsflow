@@ -3,6 +3,14 @@
 @section('content')
 <div class="mb-4"><h1 class="h2 mb-1">Welcome, {{ auth()->user()->name }}</h1><p class="text-secondary mb-0">Your account and what needs attention across your OpsFlow workspace.</p></div>
 
+<nav class="d-flex flex-wrap gap-2 mb-4" aria-label="Quick actions">
+    @can('create', App\Models\PurchaseRequest::class)<a class="btn btn-primary" href="{{ route('purchase-requests.create') }}">New purchase request</a>@endcan
+    @can('create', App\Models\ExpenseClaim::class)<a class="btn btn-outline-primary" href="{{ route('expense-claims.create') }}">New expense claim</a>@endcan
+    @can('create', App\Models\SupplierInvoice::class)<a class="btn btn-outline-primary" href="{{ route('supplier-invoices.create') }}">New supplier invoice</a>@endcan
+    <a class="btn btn-outline-secondary" href="{{ route('approvals.index') }}">Open approval inbox</a>
+    @can('viewAny', App\Models\WorkflowTemplate::class)<a class="btn btn-outline-secondary" href="{{ route('workflow-templates.index') }}">Manage workflows</a>@endcan
+</nav>
+
 <div class="row g-3 mb-4">
     @foreach ([['My drafts', $summary['drafts']], ['Waiting approval', $summary['waiting']], ['Changes requested', $summary['changes_requested']], ['My approval inbox', $approver['pending_count']]] as [$label, $value])
         <div class="col-sm-6 col-xl-3"><div class="card border-0 shadow-sm h-100"><div class="card-body"><div class="text-secondary">{{ $label }}</div><div class="display-6 fw-semibold">{{ $value }}</div></div></div></div>

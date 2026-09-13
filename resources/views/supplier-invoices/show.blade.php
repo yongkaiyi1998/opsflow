@@ -2,7 +2,7 @@
 @section('title', $supplierInvoice->internal_no)
 @section('content')
 <div class="d-flex flex-wrap justify-content-between align-items-start gap-3 mb-4">
-    <div><div class="text-secondary">{{ $supplierInvoice->internal_no }}</div><h1 class="h2 mb-1">{{ $supplierInvoice->invoice_no }}</h1><span class="badge text-bg-{{ $supplierInvoice->status === App\SupplierInvoiceStatus::Draft ? 'secondary' : 'primary' }}">{{ str($supplierInvoice->status->value)->replace('_', ' ')->title() }}</span></div>
+    <div><div class="text-secondary">{{ $supplierInvoice->internal_no }}</div><h1 class="h2 mb-1">{{ $supplierInvoice->invoice_no }}</h1><x-status-badge :status="$supplierInvoice->status" /></div>
     <div class="d-flex gap-2">@can('update', $supplierInvoice)<a class="btn btn-outline-primary" href="{{ route('supplier-invoices.edit', $supplierInvoice) }}">Edit</a>@endcan @can('submit', $supplierInvoice)<form method="POST" action="{{ route('supplier-invoices.submit', $supplierInvoice) }}">@csrf<button class="btn btn-primary" type="submit">Submit for approval</button></form>@endcan @can('withdraw', $supplierInvoice)<form method="POST" action="{{ route('supplier-invoices.withdraw', $supplierInvoice) }}">@csrf<button class="btn btn-outline-danger" type="submit">Withdraw</button></form>@endcan</div>
 </div>
 @php($runtime = $supplierInvoice->approvalInstances->first())

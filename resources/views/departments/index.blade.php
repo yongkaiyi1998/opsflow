@@ -14,7 +14,7 @@
     <thead class="table-light"><tr><th>Name</th><th>Code</th><th>Manager</th><th>Status</th><th class="text-end">Action</th></tr></thead>
     <tbody>
     @forelse ($departments as $department)
-        <tr><td>{{ $department->name }}</td><td><code>{{ $department->code }}</code></td><td>{{ $department->manager?->name ?? '—' }}</td><td><span class="badge {{ $department->status === App\MasterDataStatus::Active ? 'text-bg-success' : 'text-bg-secondary' }}">{{ ucfirst(strtolower($department->status->value)) }}</span></td><td class="text-end"><a class="btn btn-sm btn-outline-primary" href="{{ route('departments.edit', $department) }}">Edit</a></td></tr>
+        <tr><td>{{ $department->name }}</td><td><code>{{ $department->code }}</code></td><td>{{ $department->manager?->name ?? '—' }}</td><td><x-status-badge :status="$department->status" /></td><td class="text-end"><a class="btn btn-sm btn-outline-primary" href="{{ route('departments.edit', $department) }}">Edit</a></td></tr>
     @empty
         <tr><td class="text-center text-secondary py-5" colspan="5">No departments found.</td></tr>
     @endforelse

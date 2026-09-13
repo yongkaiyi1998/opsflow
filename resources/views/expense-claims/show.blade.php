@@ -2,7 +2,7 @@
 @section('title', $expenseClaim->claim_no)
 @section('content')
 <div class="d-flex flex-wrap justify-content-between align-items-start gap-3 mb-4">
-    <div><div class="text-secondary">{{ $expenseClaim->claim_no }}</div><h1 class="h2 mb-1">{{ $expenseClaim->title }}</h1><span class="badge text-bg-{{ $expenseClaim->status === App\ExpenseClaimStatus::Draft ? 'secondary' : 'primary' }}">{{ str($expenseClaim->status->value)->replace('_', ' ')->title() }}</span></div>
+    <div><div class="text-secondary">{{ $expenseClaim->claim_no }}</div><h1 class="h2 mb-1">{{ $expenseClaim->title }}</h1><x-status-badge :status="$expenseClaim->status" /></div>
     <div class="d-flex gap-2">@can('update', $expenseClaim)<a class="btn btn-outline-primary" href="{{ route('expense-claims.edit', $expenseClaim) }}">Edit</a>@endcan @can('submit', $expenseClaim)<form method="POST" action="{{ route('expense-claims.submit', $expenseClaim) }}">@csrf<button class="btn btn-primary" type="submit">Submit for approval</button></form>@endcan @can('withdraw', $expenseClaim)<form method="POST" action="{{ route('expense-claims.withdraw', $expenseClaim) }}">@csrf<button class="btn btn-outline-danger" type="submit">Withdraw</button></form>@endcan</div>
 </div>
 @php($runtime = $expenseClaim->approvalInstances->first())

@@ -9,19 +9,20 @@
 </head>
 <body>
 @auth
-    <header class="navbar navbar-dark bg-dark px-3 py-3">
-        <a class="navbar-brand fw-bold" href="{{ route('dashboard') }}">OpsFlow</a>
-        <div class="d-flex align-items-center gap-3 text-white">
+    <a class="visually-hidden-focusable position-absolute top-0 start-0 m-2 btn btn-light" href="#main-content">Skip to content</a>
+    <header class="navbar navbar-dark bg-dark px-3 py-3 shadow-sm flex-wrap gap-3">
+        <a class="navbar-brand fw-bold mb-0" href="{{ route('dashboard') }}">OpsFlow <span class="d-none d-lg-inline fw-normal text-white-50 fs-6 ms-2">Spend management & approvals</span></a>
+        <div class="d-flex align-items-center gap-2 gap-sm-3 text-white ms-auto">
             <a class="btn btn-outline-light btn-sm position-relative" href="{{ route('notifications.index') }}">Notifications @if ($unreadNotificationCount > 0)<span class="badge rounded-pill text-bg-danger">{{ $unreadNotificationCount }}</span>@endif</a>
-            <span>{{ auth()->user()->name }}</span>
+            <span class="d-none d-sm-inline">{{ auth()->user()->name }}</span>
             <form method="POST" action="{{ route('logout') }}">
                 @csrf
                 <button class="btn btn-outline-light btn-sm" type="submit">Sign out</button>
             </form>
         </div>
     </header>
-    <div class="d-md-flex min-vh-100">
-        <aside class="app-sidebar bg-white border-end p-3">
+    <div class="d-md-flex app-shell">
+        <aside class="app-sidebar bg-white p-3">
             <nav aria-label="Main navigation" class="nav nav-pills flex-column">
                 <a class="nav-link {{ request()->routeIs('dashboard') ? 'active' : '' }}" href="{{ route('dashboard') }}">Dashboard</a>
                 <a class="nav-link {{ request()->routeIs('approvals.*') || request()->routeIs('approval-assignments.*') ? 'active' : '' }}" href="{{ route('approvals.index') }}">Approval inbox</a>
@@ -42,7 +43,7 @@
                 @endcan
             </nav>
         </aside>
-        <main class="flex-grow-1 p-3 p-md-5" id="main-content">
+        <main class="app-main flex-grow-1 p-3 p-md-5" id="main-content">
             @include('partials.messages')
             @yield('content')
         </main>

@@ -15,8 +15,8 @@
 <div class="card border-0 shadow-sm"><div class="table-responsive"><table class="table table-hover align-middle mb-0">
     <thead class="table-light"><tr><th>Reference</th><th>Claim</th><th>Department</th><th>Total</th><th>Status</th><th class="text-end">Action</th></tr></thead>
     <tbody>@forelse ($expenseClaims as $expenseClaim)
-        <tr><td class="fw-semibold">{{ $expenseClaim->claim_no }}</td><td><div>{{ $expenseClaim->title }}</div><small class="text-secondary">{{ $expenseClaim->employee->name }}</small></td><td>{{ $expenseClaim->department->name }}</td><td>{{ App\Support\Money::of($expenseClaim->total_amount)->format($expenseClaim->currency) }}</td><td><span class="badge text-bg-{{ $expenseClaim->status === App\ExpenseClaimStatus::Draft ? 'secondary' : 'primary' }}">{{ str($expenseClaim->status->value)->replace('_', ' ')->title() }}</span></td><td class="text-end"><a class="btn btn-sm btn-outline-primary" href="{{ route('expense-claims.show', $expenseClaim) }}">View</a></td></tr>
-    @empty<tr><td class="text-center text-secondary py-5" colspan="6">No expense claims found.</td></tr>@endforelse</tbody>
+        <tr><td class="fw-semibold">{{ $expenseClaim->claim_no }}</td><td><div>{{ $expenseClaim->title }}</div><small class="text-secondary">{{ $expenseClaim->employee->name }}</small></td><td>{{ $expenseClaim->department->name }}</td><td>{{ App\Support\Money::of($expenseClaim->total_amount)->format($expenseClaim->currency) }}</td><td><x-status-badge :status="$expenseClaim->status" /></td><td class="text-end"><a class="btn btn-sm btn-outline-primary" href="{{ route('expense-claims.show', $expenseClaim) }}">View</a></td></tr>
+    @empty<tr><td class="text-center text-secondary py-5" colspan="6">{{ $search || $status || $categoryId ? 'No expense claims match these filters.' : 'No expense claims have been created yet.' }}</td></tr>@endforelse</tbody>
 </table></div></div>
 <div class="mt-3">{{ $expenseClaims->links() }}</div>
 @endsection

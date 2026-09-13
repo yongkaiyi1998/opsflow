@@ -14,8 +14,8 @@
 <div class="card border-0 shadow-sm"><div class="table-responsive"><table class="table table-hover align-middle mb-0">
     <thead class="table-light"><tr><th>Reference</th><th>Request</th><th>Department</th><th>Total</th><th>Status</th><th class="text-end">Action</th></tr></thead>
     <tbody>@forelse ($purchaseRequests as $purchaseRequest)
-        <tr><td class="fw-semibold">{{ $purchaseRequest->request_no }}</td><td><div>{{ $purchaseRequest->title }}</div><small class="text-secondary">{{ $purchaseRequest->requester->name }} · {{ $purchaseRequest->category->name }}</small></td><td>{{ $purchaseRequest->department->name }}</td><td>{{ App\Support\Money::of($purchaseRequest->total_amount)->format($purchaseRequest->currency) }}</td><td><span class="badge text-bg-{{ $purchaseRequest->status === App\PurchaseRequestStatus::Draft ? 'secondary' : 'primary' }}">{{ str($purchaseRequest->status->value)->replace('_', ' ')->title() }}</span></td><td class="text-end"><a class="btn btn-sm btn-outline-primary" href="{{ route('purchase-requests.show', $purchaseRequest) }}">View</a></td></tr>
-    @empty<tr><td class="text-center text-secondary py-5" colspan="6">No purchase requests found.</td></tr>@endforelse</tbody>
+        <tr><td class="fw-semibold">{{ $purchaseRequest->request_no }}</td><td><div>{{ $purchaseRequest->title }}</div><small class="text-secondary">{{ $purchaseRequest->requester->name }} · {{ $purchaseRequest->category->name }}</small></td><td>{{ $purchaseRequest->department->name }}</td><td>{{ App\Support\Money::of($purchaseRequest->total_amount)->format($purchaseRequest->currency) }}</td><td><x-status-badge :status="$purchaseRequest->status" /></td><td class="text-end"><a class="btn btn-sm btn-outline-primary" href="{{ route('purchase-requests.show', $purchaseRequest) }}">View</a></td></tr>
+    @empty<tr><td class="text-center text-secondary py-5" colspan="6">{{ $search || $status ? 'No purchase requests match these filters.' : 'No purchase requests have been created yet.' }}</td></tr>@endforelse</tbody>
 </table></div></div>
 <div class="mt-3">{{ $purchaseRequests->links() }}</div>
 @endsection

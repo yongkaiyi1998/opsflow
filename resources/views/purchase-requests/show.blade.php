@@ -2,7 +2,7 @@
 @section('title', $purchaseRequest->request_no)
 @section('content')
 <div class="d-flex flex-wrap justify-content-between align-items-start gap-3 mb-4">
-    <div><div class="text-secondary">{{ $purchaseRequest->request_no }}</div><h1 class="h2 mb-1">{{ $purchaseRequest->title }}</h1><span class="badge text-bg-{{ $purchaseRequest->status === App\PurchaseRequestStatus::Draft ? 'secondary' : 'primary' }}">{{ str($purchaseRequest->status->value)->replace('_', ' ')->title() }}</span></div>
+    <div><div class="text-secondary">{{ $purchaseRequest->request_no }}</div><h1 class="h2 mb-1">{{ $purchaseRequest->title }}</h1><x-status-badge :status="$purchaseRequest->status" /></div>
     <div class="d-flex gap-2">@can('update', $purchaseRequest)<a class="btn btn-outline-primary" href="{{ route('purchase-requests.edit', $purchaseRequest) }}">Edit</a>@endcan @can('submit', $purchaseRequest)<form method="POST" action="{{ route('purchase-requests.submit', $purchaseRequest) }}">@csrf<button class="btn btn-primary" type="submit">Submit for approval</button></form>@endcan @can('withdraw', $purchaseRequest)<form method="POST" action="{{ route('purchase-requests.withdraw', $purchaseRequest) }}">@csrf<button class="btn btn-outline-danger" type="submit">Withdraw</button></form>@endcan</div>
 </div>
 @php($runtime = $purchaseRequest->approvalInstances->first())

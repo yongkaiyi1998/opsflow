@@ -78,10 +78,8 @@ The application uses:
 - Bootstrap 5
 - Vite
 - PHPUnit / Laravel Feature Tests
-- Laravel Queue
-- Laravel Scheduler
 - Laravel Notifications
-- Laravel Events
+- Laravel Private Filesystem Storage
 
 The application is a Laravel monolith.
 
@@ -113,11 +111,7 @@ Cross-cutting components include:
 
 ```text
 Policies
-Events
-Listeners
-Jobs
 Notifications
-Scheduler
 Audit Logging
 File Storage
 ```
@@ -180,7 +174,7 @@ Frontend visibility does not replace server-side authorization.
 
 Services implement business workflows.
 
-Expected services include:
+Implemented services include:
 
 ```text
 PurchaseRequestService
@@ -191,7 +185,6 @@ WorkflowResolver
 WorkflowEngine
 ApprovalService
 
-DelegationService
 AuditService
 ```
 
@@ -572,7 +565,6 @@ REJECTED
 CHANGES_REQUESTED
 RESUBMITTED
 WITHDRAWN
-DELEGATED
 ```
 
 An Approval Action should record:
@@ -596,10 +588,6 @@ Typical request lifecycle:
 ```text
 DRAFT
    ↓ submit
-
-SUBMITTED
-   ↓
-
 IN_APPROVAL
    ├── approve ───────────→ APPROVED
    │
@@ -612,7 +600,7 @@ IN_APPROVAL
                             IN_APPROVAL
 ```
 
-State transitions are explicit business operations.
+`SUBMITTED` is the startup ApprovalAction; it is not a separate business-record status. State transitions are explicit business operations.
 
 Controllers must not directly mutate these states.
 
@@ -656,9 +644,7 @@ Manager remains completed
 Finance resumes
 ```
 
-The request does not restart from the first step unless a future business rule explicitly requires it.
-
-This reduces unnecessary repeated approval work.
+If amount, department, or category did not change, the current instance and completed approvals are preserved. Routing-material changes are re-resolved. The existing instance resumes when the selected version and rule group remain the same; a changed route preserves and cancels the old runtime before a new instance starts at step one.
 
 ---
 
@@ -870,55 +856,40 @@ Important historical information should be append-oriented rather than silently 
 
 ---
 
-# 31. Events and Side Effects
+# 31. Side Effects
 
 Core state transitions should remain separate from secondary side effects.
 
-Example:
+Implemented V1 flow:
 
 ```text
 ApprovalService
     ↓
 Database Commit
     ↓
-RequestApproved Event
-    ↓
-Listeners
-    ├── Notification
-    ├── Email
-    └── Audit / Other Side Effect
+Database Notification
 ```
 
 Notification failure must not roll back an otherwise valid approval.
 
-When events, listeners, or jobs depend on committed data, they should run after the relevant transaction commits.
+Notification delivery is registered after the relevant transaction commits. ApprovalAction and required ActivityLog writes remain inside the authoritative transaction.
 
 ---
 
 # 32. Notifications
 
-V1 may support:
+V1 supports database notifications for:
 
-- database notifications
-- email notifications
-
-Important events include:
-
-```text
-RequestSubmitted
-ApprovalAssigned
-RequestApproved
-RequestRejected
-ChangesRequested
-RequestResubmitted
-ApprovalOverdue
-```
+- new approval assignments
+- approved and rejected requests
+- changes requested
+- resubmitted requests assigned for review
 
 Notifications should point users toward the exact action or request that requires attention.
 
 ---
 
-# 33. Scheduler
+# 33. Deferred Scheduler Use
 
 Laravel Scheduler may support recurring processes such as:
 

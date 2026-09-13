@@ -1,5 +1,26 @@
 @import 'bootstrap/dist/css/bootstrap.min.css';
 
-body { background: #f4f6fa; }
+:root {
+    --opsflow-surface: #f4f6fa;
+}
+
+body { background: var(--opsflow-surface); }
 .auth-card { max-width: 28rem; }
-.app-sidebar { min-width: 14rem; }
+.app-shell { min-height: calc(100vh - 4.25rem); }
+.app-sidebar {
+    width: 100%;
+    border-bottom: 1px solid var(--bs-border-color);
+}
+.app-sidebar .nav-link { margin-bottom: .2rem; }
+.app-main { min-width: 0; }
+.card { border-radius: .75rem; }
+.table > :not(caption) > * > * { padding: .85rem .75rem; }
+
+@media (min-width: 768px) {
+    .app-sidebar {
+        flex: 0 0 15rem;
+        width: 15rem;
+        border-right: 1px solid var(--bs-border-color);
+        border-bottom: 0;
+    }
+}

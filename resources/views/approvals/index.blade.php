@@ -23,7 +23,7 @@
             };
         @endphp
         <tr><td class="fw-semibold">{{ $reference }}</td><td>{{ $context->moduleType->label() }}</td><td>{{ $requester ?? 'Unavailable' }}</td><td>{{ $context->amount->format($context->currency) }}</td><td>{{ $assignment->step->name }}</td><td>{{ $assignment->assigned_at->format('j M Y H:i') }}</td><td class="text-end"><a class="btn btn-sm btn-outline-primary" href="{{ route('approvals.show', $assignment) }}">Review</a></td></tr>
-    @empty<tr><td class="text-center text-secondary py-5" colspan="7">You have no pending approvals.</td></tr>@endforelse</tbody>
+    @empty<tr><td class="text-center text-secondary py-5" colspan="7"><strong class="d-block text-body mb-1">Your approval inbox is clear.</strong>New assignments will appear here when a workflow reaches your step.</td></tr>@endforelse</tbody>
 </table></div></div>
 <div class="mt-3">{{ $assignments->links() }}</div>
 @endsection
