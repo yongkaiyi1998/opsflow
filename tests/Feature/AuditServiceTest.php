@@ -42,6 +42,27 @@ class AuditServiceTest extends TestCase
         $this->assertSame('OpsFlow Test Agent', $log->user_agent);
     }
 
+    public function test_secret_key_variants_are_removed_recursively(): void
+    {
+        $subject = Department::factory()->create();
+
+        $log = app(AuditService::class)->logCreated($subject, null, [
+            'name' => 'Finance',
+            'integration' => [
+                'access_token' => 'do-not-store',
+                'client_secret' => 'do-not-store',
+                'service_api_key' => 'do-not-store',
+                'endpoint' => 'internal',
+            ],
+            'authorization' => 'do-not-store',
+        ]);
+
+        $this->assertSame([
+            'name' => 'Finance',
+            'integration' => ['endpoint' => 'internal'],
+        ], $log->new_values);
+    }
+
     public function test_updated_events_include_only_values_that_changed(): void
     {
         $subject = Department::factory()->create();

@@ -3,6 +3,8 @@
 namespace App\Policies;
 
 use App\ApprovalAssignmentStatus;
+use App\ApprovalInstanceStatus;
+use App\ApprovalStepStatus;
 use App\Models\SupplierInvoice;
 use App\Models\User;
 use App\SupplierInvoiceStatus;
@@ -24,11 +26,16 @@ class SupplierInvoicePolicy
     public function view(User $user, SupplierInvoice $supplierInvoice): bool
     {
         return $this->canManage($user)
-            || ($user->isActive() && $supplierInvoice->approvalInstances()
-                ->whereHas('steps.assignments', fn ($query) => $query
-                    ->where('approver_id', $user->id)
-                    ->where('status', ApprovalAssignmentStatus::Pending->value))
-                ->exists());
+            || ($user->isActive()
+                && $supplierInvoice->status === SupplierInvoiceStatus::InApproval
+                && $supplierInvoice->approvalInstances()
+                    ->where('status', ApprovalInstanceStatus::InProgress->value)
+                    ->whereHas('steps', fn ($query) => $query
+                        ->where('status', ApprovalStepStatus::Active->value)
+                        ->whereHas('assignments', fn ($query) => $query
+                            ->where('approver_id', $user->id)
+                            ->where('status', ApprovalAssignmentStatus::Pending->value)))
+                    ->exists());
     }
 
     /**

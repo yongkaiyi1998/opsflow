@@ -22,6 +22,8 @@ class AuditService
         'token',
         'api_key',
         'secret',
+        'authorization',
+        'cookie',
     ];
 
     /**
@@ -159,7 +161,7 @@ class AuditService
         $normalized = [];
 
         foreach ($values as $key => $value) {
-            if (is_string($key) && in_array(Str::lower($key), self::SENSITIVE_KEYS, true)) {
+            if (is_string($key) && $this->isSensitiveKey($key)) {
                 continue;
             }
 
@@ -167,6 +169,14 @@ class AuditService
         }
 
         return $normalized;
+    }
+
+    private function isSensitiveKey(string $key): bool
+    {
+        $key = Str::lower($key);
+
+        return in_array($key, self::SENSITIVE_KEYS, true)
+            || Str::endsWith($key, ['_password', '_secret', '_token', '_api_key']);
     }
 
     private function normalizeValue(mixed $value): mixed

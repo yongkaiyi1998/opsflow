@@ -112,6 +112,7 @@ class WorkflowEngine
             $requester = User::query()
                 ->whereKey($resolution->context->requesterId)
                 ->where('status', UserStatus::Active->value)
+                ->lockForUpdate()
                 ->first();
 
             if ($requester === null) {
@@ -253,9 +254,22 @@ class WorkflowEngine
     private function assignApprovers(ApprovalStepInstance $step, WorkflowResolution $resolution): Collection
     {
         $assignedAt = now();
+        $resolvedApprovers = $this->approverResolver->resolve($step, $resolution->context);
+        $lockedApprovers = User::query()
+            ->whereKey($resolvedApprovers->modelKeys())
+            ->orderBy('id')
+            ->lockForUpdate()
+            ->get();
+
+        if ($lockedApprovers->count() !== $resolvedApprovers->count()
+            || $lockedApprovers->contains(fn (User $user): bool => $user->status !== UserStatus::Active
+                || $user->id === $resolution->context->requesterId)) {
+            throw ApprovalRuntimeException::unavailableApprover();
+        }
+
         $assignments = new Collection;
 
-        foreach ($this->approverResolver->resolve($step, $resolution->context) as $approver) {
+        foreach ($lockedApprovers as $approver) {
             $assignments->push($step->assignments()->create([
                 'approver_id' => $approver->id,
                 'status' => ApprovalAssignmentStatus::Pending,

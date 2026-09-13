@@ -3,6 +3,8 @@
 namespace App\Http\Controllers;
 
 use App\ApprovalAssignmentStatus;
+use App\ApprovalInstanceStatus;
+use App\ApprovalStepStatus;
 use App\ExpenseClaimStatus;
 use App\Http\Requests\StoreExpenseClaimRequest;
 use App\Http\Requests\UpdateExpenseClaimRequest;
@@ -38,9 +40,15 @@ class ExpenseClaimController extends Controller
             ->with(['employee', 'department'])
             ->unless($hasOperationalVisibility, fn (Builder $query): Builder => $query->where(
                 fn (Builder $query): Builder => $query->where('employee_id', $user->id)
-                    ->orWhereHas('approvalInstances.steps.assignments', fn (Builder $query): Builder => $query
-                        ->where('approver_id', $user->id)
-                        ->where('status', ApprovalAssignmentStatus::Pending->value)),
+                    ->orWhere(fn (Builder $query): Builder => $query
+                        ->where('status', ExpenseClaimStatus::InApproval->value)
+                        ->whereHas('approvalInstances', fn (Builder $query): Builder => $query
+                            ->where('status', ApprovalInstanceStatus::InProgress->value)
+                            ->whereHas('steps', fn (Builder $query): Builder => $query
+                                ->where('status', ApprovalStepStatus::Active->value)
+                                ->whereHas('assignments', fn (Builder $query): Builder => $query
+                                    ->where('approver_id', $user->id)
+                                    ->where('status', ApprovalAssignmentStatus::Pending->value))))),
             ))
             ->when($search, fn (Builder $query): Builder => $query->where(
                 fn (Builder $query): Builder => $query->where('claim_no', 'like', "%{$search}%")

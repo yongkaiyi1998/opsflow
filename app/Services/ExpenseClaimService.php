@@ -132,9 +132,9 @@ class ExpenseClaimService
     private function auditValues(ExpenseClaim $expenseClaim): array
     {
         return [
-            ...$expenseClaim->only(['department_id', 'title', 'description', 'total_amount']),
+            ...$expenseClaim->only(['department_id', 'title', 'total_amount']),
             'items' => $expenseClaim->items->map->only([
-                'category_id', 'expense_date', 'merchant', 'description', 'amount', 'tax_amount',
+                'category_id', 'expense_date', 'amount', 'tax_amount',
             ])->values()->all(),
         ];
     }
@@ -258,7 +258,13 @@ class ExpenseClaimService
     {
         $files = DB::transaction(function () use ($expenseClaim, $user): array {
             $claim = ExpenseClaim::query()->whereKey($expenseClaim->id)->lockForUpdate()->firstOrFail();
-            Gate::forUser($user)->authorize('delete', $claim);
+            $employee = User::query()->whereKey($claim->employee_id)->lockForUpdate()->firstOrFail();
+
+            if ($employee->id !== $user->id) {
+                throw new AuthorizationException;
+            }
+
+            Gate::forUser($employee)->authorize('delete', $claim);
 
             if ($claim->approvalInstances()->exists()) {
                 throw new AuthorizationException('Submitted expense claims cannot be deleted.');
@@ -287,7 +293,7 @@ class ExpenseClaimService
             $department->lockForUpdate();
         }
 
-        if ($departmentId < 1 || ! $department->where('status', MasterDataStatus::Active->value)->exists()) {
+        if ($departmentId < 1 || $department->where('status', MasterDataStatus::Active->value)->first(['id']) === null) {
             throw ValidationException::withMessages(['department' => 'Your user profile must have an active department.']);
         }
 
@@ -363,9 +369,11 @@ class ExpenseClaimService
             $categories->lockForUpdate();
         }
 
-        $activeCount = $categories->where('status', MasterDataStatus::Active->value)->count();
+        $activeCategoryIds = $categories
+            ->where('status', MasterDataStatus::Active->value)
+            ->pluck('id');
 
-        if ($activeCount !== $categoryIds->count()) {
+        if ($activeCategoryIds->count() !== $categoryIds->count()) {
             throw ValidationException::withMessages(['items' => 'Every expense item must use an active spend category.']);
         }
     }

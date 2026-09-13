@@ -3,6 +3,8 @@
 namespace App\Http\Controllers;
 
 use App\ApprovalAssignmentStatus;
+use App\ApprovalInstanceStatus;
+use App\ApprovalStepStatus;
 use App\Http\Requests\StorePurchaseRequestRequest;
 use App\Http\Requests\UpdatePurchaseRequestRequest;
 use App\MasterDataStatus;
@@ -38,9 +40,15 @@ class PurchaseRequestController extends Controller
             ->with(['requester', 'department', 'category', 'vendor'])
             ->when(! $user->isAdmin(), fn (Builder $query): Builder => $query->where(
                 fn (Builder $query): Builder => $query->where('requester_id', $user->id)
-                    ->orWhereHas('approvalInstances.steps.assignments', fn (Builder $query): Builder => $query
-                        ->where('approver_id', $user->id)
-                        ->where('status', ApprovalAssignmentStatus::Pending->value)),
+                    ->orWhere(fn (Builder $query): Builder => $query
+                        ->where('status', PurchaseRequestStatus::InApproval->value)
+                        ->whereHas('approvalInstances', fn (Builder $query): Builder => $query
+                            ->where('status', ApprovalInstanceStatus::InProgress->value)
+                            ->whereHas('steps', fn (Builder $query): Builder => $query
+                                ->where('status', ApprovalStepStatus::Active->value)
+                                ->whereHas('assignments', fn (Builder $query): Builder => $query
+                                    ->where('approver_id', $user->id)
+                                    ->where('status', ApprovalAssignmentStatus::Pending->value))))),
             ))
             ->when($search, fn (Builder $query): Builder => $query->where(
                 fn (Builder $query): Builder => $query->where('request_no', 'like', "%{$search}%")

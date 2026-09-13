@@ -242,6 +242,9 @@ class OperationalExperienceTest extends TestCase
             ->sole();
         $this->assertSame('100.00', $log->old_values['total_amount']);
         $this->assertSame('120.00', $log->new_values['total_amount']);
+        $this->assertArrayNotHasKey('description', $log->old_values);
+        $this->assertArrayNotHasKey('description', $log->new_values);
+        $this->assertArrayNotHasKey('description', $log->new_values['items'][0]);
         $this->assertSame($requester->id, $log->user_id);
     }
 

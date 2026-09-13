@@ -3,6 +3,8 @@
 namespace App\Policies;
 
 use App\ApprovalAssignmentStatus;
+use App\ApprovalInstanceStatus;
+use App\ApprovalStepStatus;
 use App\ExpenseClaimStatus;
 use App\Models\ExpenseClaim;
 use App\Models\User;
@@ -20,11 +22,15 @@ class ExpenseClaimPolicy
         return $user->isActive() && (
             $this->hasOperationalVisibility($user)
             || $expenseClaim->employee_id === $user->id
-            || $expenseClaim->approvalInstances()
-                ->whereHas('steps.assignments', fn ($query) => $query
-                    ->where('approver_id', $user->id)
-                    ->where('status', ApprovalAssignmentStatus::Pending->value))
-                ->exists()
+            || ($expenseClaim->status === ExpenseClaimStatus::InApproval
+                && $expenseClaim->approvalInstances()
+                    ->where('status', ApprovalInstanceStatus::InProgress->value)
+                    ->whereHas('steps', fn ($query) => $query
+                        ->where('status', ApprovalStepStatus::Active->value)
+                        ->whereHas('assignments', fn ($query) => $query
+                            ->where('approver_id', $user->id)
+                            ->where('status', ApprovalAssignmentStatus::Pending->value)))
+                    ->exists())
         );
     }
 

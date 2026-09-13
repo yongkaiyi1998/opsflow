@@ -14,9 +14,11 @@ use App\Models\User;
 use App\Models\WorkflowRuleGroup;
 use App\Models\WorkflowTemplate;
 use App\Models\WorkflowVersion;
+use App\Services\ApproverResolver;
 use App\Services\WorkflowEngine;
 use App\Services\WorkflowResolver;
 use App\UserRole;
+use App\UserStatus;
 use App\WorkflowContext;
 use App\WorkflowModuleType;
 use App\WorkflowResolution;
@@ -152,6 +154,23 @@ class WorkflowEngineTest extends TestCase
         $requester = User::factory()->create(['manager_id' => $inactiveManager]);
         $this->publishedRoute([[ApproverType::RequesterManager, null, 'Manager review']]);
         $resolution = app(WorkflowResolver::class)->resolve($this->context($requester));
+
+        $this->assertStartupFailsWithoutPartialRuntime($approvable, $resolution);
+    }
+
+    public function test_startup_rechecks_approver_state_after_resolution_before_assignment(): void
+    {
+        $approvable = Department::factory()->create();
+        $approver = User::factory()->create();
+        $requester = User::factory()->create();
+        $this->publishedRoute([[ApproverType::SpecificUser, (string) $approver->id, 'Manager review']]);
+        $resolution = app(WorkflowResolver::class)->resolve($this->context($requester));
+        $resolver = $this->mock(ApproverResolver::class);
+        $resolver->shouldReceive('resolve')->once()->andReturnUsing(function () use ($approver) {
+            DB::table('users')->where('id', $approver->id)->update(['status' => UserStatus::Inactive->value]);
+
+            return User::query()->whereKey($approver->id)->get();
+        });
 
         $this->assertStartupFailsWithoutPartialRuntime($approvable, $resolution);
     }

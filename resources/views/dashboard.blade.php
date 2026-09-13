@@ -1,7 +1,7 @@
 @extends('layouts.app')
 @section('title', 'Dashboard')
 @section('content')
-<div class="mb-4"><h1 class="h2 mb-1">Welcome, {{ auth()->user()->name }}</h1><p class="text-secondary mb-0">What needs attention across your OpsFlow workspace.</p></div>
+<div class="mb-4"><h1 class="h2 mb-1">Welcome, {{ auth()->user()->name }}</h1><p class="text-secondary mb-0">Your account and what needs attention across your OpsFlow workspace.</p></div>
 
 <div class="row g-3 mb-4">
     @foreach ([['My drafts', $summary['drafts']], ['Waiting approval', $summary['waiting']], ['Changes requested', $summary['changes_requested']], ['My approval inbox', $approver['pending_count']]] as [$label, $value])

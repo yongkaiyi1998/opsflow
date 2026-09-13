@@ -83,7 +83,8 @@ class SupplierInvoiceService
         try {
             return DB::transaction(function () use ($supplierInvoice, $attributes, $user): SupplierInvoice {
                 $lockedInvoice = SupplierInvoice::query()->whereKey($supplierInvoice->id)->lockForUpdate()->firstOrFail();
-                Gate::forUser($user)->authorize('update', $lockedInvoice);
+                [$lockedUser] = $this->lockUsers($user->id);
+                Gate::forUser($lockedUser)->authorize('update', $lockedInvoice);
 
                 if ($lockedInvoice->lock_version !== (int) $attributes['lock_version']) {
                     throw ValidationException::withMessages([
@@ -114,7 +115,7 @@ class SupplierInvoiceService
                 $lockedInvoice->items()->delete();
                 $lockedInvoice->items()->createMany($items);
                 $lockedInvoice->load('items');
-                $this->auditService->logUpdated($lockedInvoice, $user, $oldValues, $this->auditValues($lockedInvoice));
+                $this->auditService->logUpdated($lockedInvoice, $lockedUser, $oldValues, $this->auditValues($lockedInvoice));
 
                 return $lockedInvoice->load(['items', 'vendor', 'department', 'category', 'submittedBy']);
             }, 5);
@@ -131,10 +132,10 @@ class SupplierInvoiceService
         return [
             ...$supplierInvoice->only([
                 'invoice_no', 'vendor_id', 'department_id', 'category_id', 'invoice_date',
-                'due_date', 'subtotal', 'tax_amount', 'total_amount', 'description',
+                'due_date', 'subtotal', 'tax_amount', 'total_amount',
             ]),
             'items' => $supplierInvoice->items->map->only([
-                'description', 'quantity', 'unit_price', 'subtotal',
+                'quantity', 'unit_price', 'subtotal',
             ])->values()->all(),
         ];
     }
@@ -143,10 +144,15 @@ class SupplierInvoiceService
     {
         return DB::transaction(function () use ($supplierInvoice, $user): SupplierInvoice {
             $lockedInvoice = SupplierInvoice::query()->whereKey($supplierInvoice->id)->lockForUpdate()->firstOrFail();
-            Gate::forUser($user)->authorize('submit', $lockedInvoice);
-            $lockedInvoice->load('items');
-            $submittedBy = User::query()->whereKey($lockedInvoice->submitted_by)->lockForUpdate()->firstOrFail();
-            $this->validatePersistedInvoice($lockedInvoice);
+            [$lockedUser, $submittedBy] = $this->lockUsers($user->id, $lockedInvoice->submitted_by);
+            Gate::forUser($lockedUser)->authorize('submit', $lockedInvoice);
+            $lockedInvoice->setRelation('items', SupplierInvoiceItem::query()
+                ->where('supplier_invoice_id', $lockedInvoice->id)
+                ->orderBy('id')
+                ->lockForUpdate()
+                ->get());
+            $lockedInvoice->setRelation('attachments', $lockedInvoice->attachments()->lockForUpdate()->get());
+            $this->validatePersistedInvoice($lockedInvoice, true);
             [$items, $subtotal, $tax, $total] = $this->calculate([
                 'items' => $lockedInvoice->items->map->only(['description', 'quantity', 'unit_price'])->all(),
                 'tax_amount' => $lockedInvoice->tax_amount,
@@ -191,7 +197,8 @@ class SupplierInvoiceService
     {
         return DB::transaction(function () use ($supplierInvoice, $user, $comment): SupplierInvoice {
             $lockedInvoice = SupplierInvoice::query()->whereKey($supplierInvoice->id)->lockForUpdate()->firstOrFail();
-            Gate::forUser($user)->authorize('resubmit', $lockedInvoice);
+            [$lockedUser, $submittedBy] = $this->lockUsers($user->id, $lockedInvoice->submitted_by);
+            Gate::forUser($lockedUser)->authorize('resubmit', $lockedInvoice);
             $items = SupplierInvoiceItem::query()
                 ->where('supplier_invoice_id', $lockedInvoice->id)
                 ->orderBy('id')
@@ -199,8 +206,7 @@ class SupplierInvoiceService
                 ->get();
             $lockedInvoice->setRelation('items', $items);
             $lockedInvoice->setRelation('attachments', $lockedInvoice->attachments()->lockForUpdate()->get());
-            $submittedBy = User::query()->whereKey($lockedInvoice->submitted_by)->lockForUpdate()->firstOrFail();
-            $this->validatePersistedInvoice($lockedInvoice);
+            $this->validatePersistedInvoice($lockedInvoice, true);
             [$normalizedItems, $subtotal, $tax, $total] = $this->calculate([
                 'items' => $items->map->only(['description', 'quantity', 'unit_price'])->all(),
                 'tax_amount' => $lockedInvoice->tax_amount,
@@ -226,7 +232,7 @@ class SupplierInvoiceService
                 $total->decimal(),
                 $lockedInvoice->currency,
             );
-            $this->approvalService->resubmit($lockedInvoice, $user, $context, $comment);
+            $this->approvalService->resubmit($lockedInvoice, $lockedUser, $context, $comment);
 
             return $lockedInvoice->load(['items', 'approvalInstances.steps.assignments', 'approvalInstances.actions']);
         }, 5);
@@ -236,7 +242,8 @@ class SupplierInvoiceService
     {
         $files = DB::transaction(function () use ($supplierInvoice, $user): array {
             $lockedInvoice = SupplierInvoice::query()->whereKey($supplierInvoice->id)->lockForUpdate()->firstOrFail();
-            Gate::forUser($user)->authorize('delete', $lockedInvoice);
+            [$lockedUser] = $this->lockUsers($user->id);
+            Gate::forUser($lockedUser)->authorize('delete', $lockedInvoice);
 
             if ($lockedInvoice->approvalInstances()->exists()) {
                 throw new AuthorizationException('Submitted supplier invoices cannot be deleted.');
@@ -261,7 +268,7 @@ class SupplierInvoiceService
      * @param  array<string, mixed>  $attributes
      * @return array{int, int, int}
      */
-    private function validateMasterData(array $attributes): array
+    private function validateMasterData(array $attributes, bool $lock = false): array
     {
         $models = [
             'vendor_id' => ['table' => 'vendors', 'message' => 'Select an active vendor.'],
@@ -273,7 +280,15 @@ class SupplierInvoiceService
         foreach ($models as $field => $configuration) {
             $id = (int) ($attributes[$field] ?? 0);
 
-            if ($id < 1 || ! DB::table($configuration['table'])->where('id', $id)->where('status', MasterDataStatus::Active->value)->exists()) {
+            $model = DB::table($configuration['table'])
+                ->where('id', $id)
+                ->where('status', MasterDataStatus::Active->value);
+
+            if ($lock) {
+                $model->lockForUpdate();
+            }
+
+            if ($id < 1 || $model->first(['id']) === null) {
                 throw ValidationException::withMessages([$field => $configuration['message']]);
             }
 
@@ -374,14 +389,14 @@ class SupplierInvoiceService
         return $whole.'.'.$fraction;
     }
 
-    private function validatePersistedInvoice(SupplierInvoice $invoice): void
+    private function validatePersistedInvoice(SupplierInvoice $invoice, bool $lockMasterData = false): void
     {
         $invoiceNumber = $this->normalizeInvoiceNumber($invoice->invoice_no);
         $this->validateMasterData([
             'vendor_id' => $invoice->vendor_id,
             'department_id' => $invoice->department_id,
             'category_id' => $invoice->category_id,
-        ]);
+        ], $lockMasterData);
         $this->ensureUniqueVendorInvoice($invoice->vendor_id, $invoiceNumber, $invoice->id);
 
         if (trim($invoice->description) === '' || $invoice->invoice_date === null
@@ -398,6 +413,21 @@ class SupplierInvoiceService
                 'attachment' => 'Attach the supplier invoice document before submitting.',
             ]);
         }
+    }
+
+    /** @return list<User> */
+    private function lockUsers(int ...$ids): array
+    {
+        $users = User::query()
+            ->whereKey(array_values(array_unique($ids)))
+            ->orderBy('id')
+            ->lockForUpdate()
+            ->get()
+            ->keyBy('id');
+
+        return collect($ids)
+            ->map(fn (int $id): User => $users->get($id) ?? throw new AuthorizationException)
+            ->all();
     }
 
     private function throwIfVendorInvoiceConflict(QueryException $exception): void

@@ -39,6 +39,7 @@ class PurchaseRequestService
 
         return DB::transaction(function () use ($attributes, $requester): PurchaseRequest {
             $lockedRequester = User::query()->whereKey($requester->id)->lockForUpdate()->firstOrFail();
+            Gate::forUser($lockedRequester)->authorize('create', PurchaseRequest::class);
             $departmentId = $this->validDepartmentId($lockedRequester);
             [$categoryId, $vendorId] = $this->validateMasterData($attributes);
             [$items, $subtotal, $tax, $total] = $this->calculate($attributes);
@@ -70,7 +71,13 @@ class PurchaseRequestService
     {
         return DB::transaction(function () use ($purchaseRequest, $attributes, $user): PurchaseRequest {
             $lockedRequest = PurchaseRequest::query()->whereKey($purchaseRequest->id)->lockForUpdate()->firstOrFail();
-            Gate::forUser($user)->authorize('update', $lockedRequest);
+            $lockedRequester = User::query()->whereKey($lockedRequest->requester_id)->lockForUpdate()->firstOrFail();
+
+            if ($lockedRequester->id !== $user->id) {
+                throw new AuthorizationException;
+            }
+
+            Gate::forUser($lockedRequester)->authorize('update', $lockedRequest);
 
             if ($lockedRequest->lock_version !== (int) $attributes['lock_version']) {
                 throw ValidationException::withMessages([
@@ -78,8 +85,11 @@ class PurchaseRequestService
                 ]);
             }
 
-            $lockedRequester = User::query()->whereKey($lockedRequest->requester_id)->lockForUpdate()->firstOrFail();
-            $lockedRequest->load('items');
+            $lockedRequest->setRelation('items', PurchaseRequestItem::query()
+                ->where('purchase_request_id', $lockedRequest->id)
+                ->orderBy('id')
+                ->lockForUpdate()
+                ->get());
             $oldValues = $this->auditValues($lockedRequest);
             $departmentId = $this->validDepartmentId($lockedRequester);
             [$categoryId, $vendorId] = $this->validateMasterData($attributes);
@@ -111,11 +121,11 @@ class PurchaseRequestService
     {
         return [
             ...$purchaseRequest->only([
-                'department_id', 'vendor_id', 'category_id', 'title', 'description',
+                'department_id', 'vendor_id', 'category_id', 'title',
                 'subtotal', 'tax_amount', 'total_amount', 'needed_by_date',
             ]),
             'items' => $purchaseRequest->items->map->only([
-                'description', 'quantity', 'unit_price', 'subtotal',
+                'quantity', 'unit_price', 'subtotal',
             ])->values()->all(),
         ];
     }
@@ -124,10 +134,17 @@ class PurchaseRequestService
     {
         return DB::transaction(function () use ($purchaseRequest, $user): PurchaseRequest {
             $lockedRequest = PurchaseRequest::query()->whereKey($purchaseRequest->id)->lockForUpdate()->firstOrFail();
-            Gate::forUser($user)->authorize('submit', $lockedRequest);
-            $lockedRequest->load('items');
             $requester = User::query()->whereKey($lockedRequest->requester_id)->lockForUpdate()->firstOrFail();
-            $departmentId = $this->validDepartmentId($requester);
+            if ($requester->id !== $user->id) {
+                throw new AuthorizationException;
+            }
+            Gate::forUser($requester)->authorize('submit', $lockedRequest);
+            $lockedRequest->setRelation('items', PurchaseRequestItem::query()
+                ->where('purchase_request_id', $lockedRequest->id)
+                ->orderBy('id')
+                ->lockForUpdate()
+                ->get());
+            $departmentId = $this->validDepartmentId($requester, true);
             $this->validatePersistedRequest($lockedRequest);
             [$items, $subtotal, $tax, $total] = $this->calculate([
                 'items' => $lockedRequest->items->map->only(['description', 'quantity', 'unit_price'])->all(),
@@ -174,15 +191,20 @@ class PurchaseRequestService
     {
         return DB::transaction(function () use ($purchaseRequest, $user, $comment): PurchaseRequest {
             $lockedRequest = PurchaseRequest::query()->whereKey($purchaseRequest->id)->lockForUpdate()->firstOrFail();
-            Gate::forUser($user)->authorize('resubmit', $lockedRequest);
+            $requester = User::query()->whereKey($lockedRequest->requester_id)->lockForUpdate()->firstOrFail();
+
+            if ($requester->id !== $user->id) {
+                throw new AuthorizationException;
+            }
+
+            Gate::forUser($requester)->authorize('resubmit', $lockedRequest);
             $items = PurchaseRequestItem::query()
                 ->where('purchase_request_id', $lockedRequest->id)
                 ->orderBy('id')
                 ->lockForUpdate()
                 ->get();
             $lockedRequest->setRelation('items', $items);
-            $requester = User::query()->whereKey($lockedRequest->requester_id)->lockForUpdate()->firstOrFail();
-            $departmentId = $this->validDepartmentId($requester);
+            $departmentId = $this->validDepartmentId($requester, true);
             $this->validatePersistedRequest($lockedRequest);
             [$normalizedItems, $subtotal, $tax, $total] = $this->calculate([
                 'items' => $items->map->only(['description', 'quantity', 'unit_price'])->all(),
@@ -217,7 +239,13 @@ class PurchaseRequestService
     {
         $files = DB::transaction(function () use ($purchaseRequest, $user): array {
             $lockedRequest = PurchaseRequest::query()->whereKey($purchaseRequest->id)->lockForUpdate()->firstOrFail();
-            Gate::forUser($user)->authorize('delete', $lockedRequest);
+            $requester = User::query()->whereKey($lockedRequest->requester_id)->lockForUpdate()->firstOrFail();
+
+            if ($requester->id !== $user->id) {
+                throw new AuthorizationException;
+            }
+
+            Gate::forUser($requester)->authorize('delete', $lockedRequest);
 
             if ($lockedRequest->approvalInstances()->exists()) {
                 throw new AuthorizationException('Submitted purchase requests cannot be deleted.');
@@ -238,18 +266,21 @@ class PurchaseRequestService
         }
     }
 
-    private function validDepartmentId(User $requester): int
+    private function validDepartmentId(User $requester, bool $lock = false): int
     {
         if ($requester->status !== UserStatus::Active || $requester->department_id === null) {
             throw ValidationException::withMessages(['requester' => 'An active requester with an active department is required.']);
         }
 
-        $active = DB::table('departments')
+        $department = DB::table('departments')
             ->where('id', $requester->department_id)
-            ->where('status', MasterDataStatus::Active->value)
-            ->exists();
+            ->where('status', MasterDataStatus::Active->value);
 
-        if (! $active) {
+        if ($lock) {
+            $department->lockForUpdate();
+        }
+
+        if ($department->first(['id']) === null) {
             throw ValidationException::withMessages(['requester' => 'An active requester with an active department is required.']);
         }
 
@@ -259,17 +290,35 @@ class PurchaseRequestService
     /** @param array<string, mixed> $attributes
      * @return array{int, ?int}
      */
-    private function validateMasterData(array $attributes): array
+    private function validateMasterData(array $attributes, bool $lock = false): array
     {
         $categoryId = (int) $attributes['category_id'];
         $vendorId = isset($attributes['vendor_id']) && $attributes['vendor_id'] !== '' ? (int) $attributes['vendor_id'] : null;
 
-        if (! DB::table('spend_categories')->where('id', $categoryId)->where('status', MasterDataStatus::Active->value)->exists()) {
+        $category = DB::table('spend_categories')
+            ->where('id', $categoryId)
+            ->where('status', MasterDataStatus::Active->value);
+
+        if ($lock) {
+            $category->lockForUpdate();
+        }
+
+        if ($category->first(['id']) === null) {
             throw ValidationException::withMessages(['category_id' => 'Select an active spend category.']);
         }
 
-        if ($vendorId !== null && ! DB::table('vendors')->where('id', $vendorId)->where('status', MasterDataStatus::Active->value)->exists()) {
-            throw ValidationException::withMessages(['vendor_id' => 'Select an active vendor.']);
+        if ($vendorId !== null) {
+            $vendor = DB::table('vendors')
+                ->where('id', $vendorId)
+                ->where('status', MasterDataStatus::Active->value);
+
+            if ($lock) {
+                $vendor->lockForUpdate();
+            }
+
+            if ($vendor->first(['id']) === null) {
+                throw ValidationException::withMessages(['vendor_id' => 'Select an active vendor.']);
+            }
         }
 
         return [$categoryId, $vendorId];
@@ -336,7 +385,7 @@ class PurchaseRequestService
         $this->validateMasterData([
             'category_id' => $purchaseRequest->category_id,
             'vendor_id' => $purchaseRequest->vendor_id,
-        ]);
+        ], true);
 
         if ($purchaseRequest->needed_by_date?->isBefore(today())) {
             throw ValidationException::withMessages(['needed_by_date' => 'The needed-by date must be today or later.']);
