@@ -6,11 +6,13 @@ use App\Http\Requests\StoreUserRequest;
 use App\Http\Requests\UpdateUserRequest;
 use App\Models\Department;
 use App\Models\User;
+use App\Services\AuditService;
 use App\UserRole;
 use App\UserStatus;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\View\View;
 
@@ -70,13 +72,20 @@ class UserController extends Controller
         ]);
     }
 
-    public function update(UpdateUserRequest $request, User $user): RedirectResponse
+    public function update(UpdateUserRequest $request, User $user, AuditService $auditService): RedirectResponse
     {
         $attributes = $request->validated();
         if (blank($attributes['password'] ?? null)) {
             unset($attributes['password']);
         }
-        $user->forceFill($attributes)->save();
+        DB::transaction(function () use ($request, $user, $attributes, $auditService): void {
+            $oldRole = $user->role;
+            $user->forceFill($attributes)->save();
+
+            if ($oldRole !== $user->role) {
+                $auditService->logUserRoleChanged($user, $request->user(), $oldRole, $user->role, $request);
+            }
+        });
 
         return redirect()->route('users.index')->with('success', 'User updated.');
     }

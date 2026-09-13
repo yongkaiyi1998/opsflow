@@ -12,6 +12,7 @@
     <header class="navbar navbar-dark bg-dark px-3 py-3">
         <a class="navbar-brand fw-bold" href="{{ route('dashboard') }}">OpsFlow</a>
         <div class="d-flex align-items-center gap-3 text-white">
+            <a class="btn btn-outline-light btn-sm position-relative" href="{{ route('notifications.index') }}">Notifications @if ($unreadNotificationCount > 0)<span class="badge rounded-pill text-bg-danger">{{ $unreadNotificationCount }}</span>@endif</a>
             <span>{{ auth()->user()->name }}</span>
             <form method="POST" action="{{ route('logout') }}">
                 @csrf

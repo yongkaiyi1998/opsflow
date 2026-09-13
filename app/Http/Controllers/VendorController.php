@@ -5,9 +5,11 @@ namespace App\Http\Controllers;
 use App\Http\Requests\StoreVendorRequest;
 use App\Http\Requests\UpdateVendorRequest;
 use App\Models\Vendor;
+use App\Services\AuditService;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\View\View;
 
@@ -36,9 +38,14 @@ class VendorController extends Controller
         return view('vendors.create');
     }
 
-    public function store(StoreVendorRequest $request): RedirectResponse
+    public function store(StoreVendorRequest $request, AuditService $auditService): RedirectResponse
     {
-        Vendor::create($request->validated());
+        DB::transaction(function () use ($request, $auditService): void {
+            $vendor = Vendor::create($request->validated());
+            $auditService->logCreated($vendor, $request->user(), $vendor->only([
+                'name', 'code', 'email', 'phone', 'status',
+            ]), $request);
+        });
 
         return redirect()->route('vendors.index')->with('success', 'Vendor created.');
     }
@@ -50,9 +57,15 @@ class VendorController extends Controller
         return view('vendors.edit', compact('vendor'));
     }
 
-    public function update(UpdateVendorRequest $request, Vendor $vendor): RedirectResponse
+    public function update(UpdateVendorRequest $request, Vendor $vendor, AuditService $auditService): RedirectResponse
     {
-        $vendor->update($request->validated());
+        DB::transaction(function () use ($request, $vendor, $auditService): void {
+            $oldValues = $vendor->only(['name', 'code', 'email', 'phone', 'status']);
+            $vendor->update($request->validated());
+            $auditService->logUpdated($vendor, $request->user(), $oldValues, $vendor->only([
+                'name', 'code', 'email', 'phone', 'status',
+            ]), $request);
+        });
 
         return redirect()->route('vendors.index')->with('success', 'Vendor updated.');
     }

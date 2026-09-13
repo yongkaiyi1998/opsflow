@@ -6,10 +6,12 @@ use App\Http\Requests\StoreDepartmentRequest;
 use App\Http\Requests\UpdateDepartmentRequest;
 use App\Models\Department;
 use App\Models\User;
+use App\Services\AuditService;
 use App\UserStatus;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\View\View;
 
@@ -35,9 +37,14 @@ class DepartmentController extends Controller
         return view('departments.create', ['managers' => User::where('status', UserStatus::Active)->orderBy('name')->get()]);
     }
 
-    public function store(StoreDepartmentRequest $request): RedirectResponse
+    public function store(StoreDepartmentRequest $request, AuditService $auditService): RedirectResponse
     {
-        Department::create($request->validated());
+        DB::transaction(function () use ($request, $auditService): void {
+            $department = Department::create($request->validated());
+            $auditService->logCreated($department, $request->user(), $department->only([
+                'name', 'code', 'manager_id', 'status',
+            ]), $request);
+        });
 
         return redirect()->route('departments.index')->with('success', 'Department created.');
     }
@@ -52,9 +59,15 @@ class DepartmentController extends Controller
         return view('departments.edit', compact('department', 'managers'));
     }
 
-    public function update(UpdateDepartmentRequest $request, Department $department): RedirectResponse
+    public function update(UpdateDepartmentRequest $request, Department $department, AuditService $auditService): RedirectResponse
     {
-        $department->update($request->validated());
+        DB::transaction(function () use ($request, $department, $auditService): void {
+            $oldValues = $department->only(['name', 'code', 'manager_id', 'status']);
+            $department->update($request->validated());
+            $auditService->logUpdated($department, $request->user(), $oldValues, $department->only([
+                'name', 'code', 'manager_id', 'status',
+            ]), $request);
+        });
 
         return redirect()->route('departments.index')->with('success', 'Department updated.');
     }

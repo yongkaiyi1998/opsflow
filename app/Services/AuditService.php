@@ -76,6 +76,19 @@ class AuditService
         );
     }
 
+    public function logUserRoleChanged(User $subject, User $actor, BackedEnum|string $oldRole, BackedEnum|string $newRole, ?Request $request = null): ActivityLog
+    {
+        return $this->createLog(
+            $subject,
+            $actor,
+            'USER_ROLE_CHANGED',
+            ['role' => $oldRole],
+            ['role' => $newRole],
+            $request,
+            [],
+        );
+    }
+
     /**
      * @param  array<string, mixed>|null  $oldValues
      * @param  array<string, mixed>|null  $newValues

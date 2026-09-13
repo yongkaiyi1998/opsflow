@@ -29,6 +29,7 @@ class PurchaseRequestService
         private readonly WorkflowResolver $workflowResolver,
         private readonly WorkflowEngine $workflowEngine,
         private readonly ApprovalService $approvalService,
+        private readonly AuditService $auditService,
     ) {}
 
     /** @param array<string, mixed> $attributes */
@@ -78,6 +79,8 @@ class PurchaseRequestService
             }
 
             $lockedRequester = User::query()->whereKey($lockedRequest->requester_id)->lockForUpdate()->firstOrFail();
+            $lockedRequest->load('items');
+            $oldValues = $this->auditValues($lockedRequest);
             $departmentId = $this->validDepartmentId($lockedRequester);
             [$categoryId, $vendorId] = $this->validateMasterData($attributes);
             [$items, $subtotal, $tax, $total] = $this->calculate($attributes);
@@ -96,9 +99,25 @@ class PurchaseRequestService
             ])->save();
             $lockedRequest->items()->delete();
             $lockedRequest->items()->createMany($items);
+            $lockedRequest->load('items');
+            $this->auditService->logUpdated($lockedRequest, $user, $oldValues, $this->auditValues($lockedRequest));
 
             return $lockedRequest->load(['items', 'requester', 'department', 'category', 'vendor']);
         }, 5);
+    }
+
+    /** @return array<string, mixed> */
+    private function auditValues(PurchaseRequest $purchaseRequest): array
+    {
+        return [
+            ...$purchaseRequest->only([
+                'department_id', 'vendor_id', 'category_id', 'title', 'description',
+                'subtotal', 'tax_amount', 'total_amount', 'needed_by_date',
+            ]),
+            'items' => $purchaseRequest->items->map->only([
+                'description', 'quantity', 'unit_price', 'subtotal',
+            ])->values()->all(),
+        ];
     }
 
     public function submit(PurchaseRequest $purchaseRequest, User $user): PurchaseRequest

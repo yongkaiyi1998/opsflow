@@ -29,6 +29,7 @@ class ExpenseClaimService
         private readonly WorkflowResolver $workflowResolver,
         private readonly WorkflowEngine $workflowEngine,
         private readonly ApprovalService $approvalService,
+        private readonly AuditService $auditService,
     ) {}
 
     /** @param array<string, mixed> $attributes */
@@ -86,6 +87,8 @@ class ExpenseClaimService
                 ->lockForUpdate()
                 ->get()
                 ->keyBy('id');
+            $lockedClaim->setRelation('items', $existingItems->values());
+            $oldValues = $this->auditValues($lockedClaim);
             $submittedIds = collect($items)->pluck('id')->filter()->map(fn ($id): int => (int) $id);
 
             if ($submittedIds->diff($existingItems->keys())->isNotEmpty()) {
@@ -114,6 +117,8 @@ class ExpenseClaimService
                 'total_amount' => $total->decimal(),
                 'lock_version' => $lockedClaim->lock_version + 1,
             ])->save();
+            $lockedClaim->load('items');
+            $this->auditService->logUpdated($lockedClaim, $user, $oldValues, $this->auditValues($lockedClaim));
 
             return [$lockedClaim->load(['employee', 'department', 'items.category']), $files];
         }, 5);
@@ -121,6 +126,17 @@ class ExpenseClaimService
         $this->deleteFiles($files);
 
         return $claim;
+    }
+
+    /** @return array<string, mixed> */
+    private function auditValues(ExpenseClaim $expenseClaim): array
+    {
+        return [
+            ...$expenseClaim->only(['department_id', 'title', 'description', 'total_amount']),
+            'items' => $expenseClaim->items->map->only([
+                'category_id', 'expense_date', 'merchant', 'description', 'amount', 'tax_amount',
+            ])->values()->all(),
+        ];
     }
 
     public function submit(ExpenseClaim $expenseClaim, User $user): ExpenseClaim

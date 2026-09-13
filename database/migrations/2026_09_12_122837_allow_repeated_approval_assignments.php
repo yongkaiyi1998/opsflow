@@ -12,7 +12,7 @@ return new class extends Migration
     public function up(): void
     {
         Schema::table('approval_assignments', function (Blueprint $table) {
-            $table->dropUnique('approval_assignments_step_approver_unique');
+            $table->dropUnique(['approval_step_instance_id', 'approver_id']);
             $table->index(
                 ['approval_step_instance_id', 'approver_id'],
                 'approval_assignments_step_approver_index',
@@ -27,10 +27,7 @@ return new class extends Migration
     {
         Schema::table('approval_assignments', function (Blueprint $table) {
             $table->dropIndex('approval_assignments_step_approver_index');
-            $table->unique(
-                ['approval_step_instance_id', 'approver_id'],
-                'approval_assignments_step_approver_unique',
-            );
+            $table->unique(['approval_step_instance_id', 'approver_id']);
         });
     }
 };

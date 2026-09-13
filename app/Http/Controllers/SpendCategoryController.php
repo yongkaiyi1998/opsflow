@@ -5,9 +5,11 @@ namespace App\Http\Controllers;
 use App\Http\Requests\StoreSpendCategoryRequest;
 use App\Http\Requests\UpdateSpendCategoryRequest;
 use App\Models\SpendCategory;
+use App\Services\AuditService;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\View\View;
 
@@ -33,9 +35,14 @@ class SpendCategoryController extends Controller
         return view('spend-categories.create');
     }
 
-    public function store(StoreSpendCategoryRequest $request): RedirectResponse
+    public function store(StoreSpendCategoryRequest $request, AuditService $auditService): RedirectResponse
     {
-        SpendCategory::create($request->validated());
+        DB::transaction(function () use ($request, $auditService): void {
+            $category = SpendCategory::create($request->validated());
+            $auditService->logCreated($category, $request->user(), $category->only([
+                'name', 'code', 'status',
+            ]), $request);
+        });
 
         return redirect()->route('spend-categories.index')->with('success', 'Spend category created.');
     }
@@ -47,9 +54,15 @@ class SpendCategoryController extends Controller
         return view('spend-categories.edit', compact('spendCategory'));
     }
 
-    public function update(UpdateSpendCategoryRequest $request, SpendCategory $spendCategory): RedirectResponse
+    public function update(UpdateSpendCategoryRequest $request, SpendCategory $spendCategory, AuditService $auditService): RedirectResponse
     {
-        $spendCategory->update($request->validated());
+        DB::transaction(function () use ($request, $spendCategory, $auditService): void {
+            $oldValues = $spendCategory->only(['name', 'code', 'status']);
+            $spendCategory->update($request->validated());
+            $auditService->logUpdated($spendCategory, $request->user(), $oldValues, $spendCategory->only([
+                'name', 'code', 'status',
+            ]), $request);
+        });
 
         return redirect()->route('spend-categories.index')->with('success', 'Spend category updated.');
     }

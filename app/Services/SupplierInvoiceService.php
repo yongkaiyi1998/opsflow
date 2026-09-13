@@ -32,6 +32,7 @@ class SupplierInvoiceService
         private readonly WorkflowResolver $workflowResolver,
         private readonly WorkflowEngine $workflowEngine,
         private readonly ApprovalService $approvalService,
+        private readonly AuditService $auditService,
     ) {}
 
     /** @param array<string, mixed> $attributes */
@@ -90,6 +91,8 @@ class SupplierInvoiceService
                     ]);
                 }
 
+                $lockedInvoice->load('items');
+                $oldValues = $this->auditValues($lockedInvoice);
                 [$vendorId, $departmentId, $categoryId] = $this->validateMasterData($attributes);
                 $invoiceNumber = $this->normalizeInvoiceNumber($attributes['invoice_no'] ?? null);
                 $this->ensureUniqueVendorInvoice($vendorId, $invoiceNumber, $lockedInvoice->id);
@@ -110,6 +113,8 @@ class SupplierInvoiceService
                 ])->save();
                 $lockedInvoice->items()->delete();
                 $lockedInvoice->items()->createMany($items);
+                $lockedInvoice->load('items');
+                $this->auditService->logUpdated($lockedInvoice, $user, $oldValues, $this->auditValues($lockedInvoice));
 
                 return $lockedInvoice->load(['items', 'vendor', 'department', 'category', 'submittedBy']);
             }, 5);
@@ -118,6 +123,20 @@ class SupplierInvoiceService
 
             throw $exception;
         }
+    }
+
+    /** @return array<string, mixed> */
+    private function auditValues(SupplierInvoice $supplierInvoice): array
+    {
+        return [
+            ...$supplierInvoice->only([
+                'invoice_no', 'vendor_id', 'department_id', 'category_id', 'invoice_date',
+                'due_date', 'subtotal', 'tax_amount', 'total_amount', 'description',
+            ]),
+            'items' => $supplierInvoice->items->map->only([
+                'description', 'quantity', 'unit_price', 'subtotal',
+            ])->values()->all(),
+        ];
     }
 
     public function submit(SupplierInvoice $supplierInvoice, User $user): SupplierInvoice

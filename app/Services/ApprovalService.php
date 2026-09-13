@@ -33,6 +33,7 @@ class ApprovalService
         private readonly ApproverResolver $approverResolver,
         private readonly WorkflowResolver $workflowResolver,
         private readonly WorkflowEngine $workflowEngine,
+        private readonly WorkflowNotifier $workflowNotifier,
     ) {}
 
     public function approve(ApprovalAssignment $assignment, User $actor, ?string $comment = null): ApprovalInstance
@@ -86,20 +87,14 @@ class ApprovalService
                     $this->workflowEngine->validateStart($lockedBusiness, $resolution);
                     $transitionedAt = now();
                     $this->cancelRuntime($instance, $steps, $assignments, $transitionedAt);
-                    $newInstance = $this->workflowEngine->start($lockedBusiness, $resolution);
-                    $resubmittedAt = now();
-                    $newInstance->actions()->create([
-                        'actor_id' => $lockedActor->id,
-                        'action' => ApprovalActionType::Resubmitted,
-                        'comment' => $comment,
-                        'metadata' => [
-                            'routing_changed' => true,
-                            'previous_approval_instance_id' => $instance->id,
-                            'new_approval_instance_id' => $newInstance->id,
-                        ],
-                        'created_at' => $resubmittedAt,
-                    ]);
-                    $this->updateBusinessStatus($lockedBusiness, 'IN_APPROVAL', null, $resubmittedAt);
+                    $newInstance = $this->workflowEngine->startReplacement(
+                        $lockedBusiness,
+                        $resolution,
+                        $lockedActor,
+                        $instance,
+                        $comment,
+                    );
+                    $this->updateBusinessStatus($lockedBusiness, 'IN_APPROVAL', null, now());
 
                     return $newInstance->load(['approvable', 'steps.assignments.approver', 'actions.actor']);
                 }
@@ -253,6 +248,14 @@ class ApprovalService
                     'created_at' => $actedAt,
                 ]);
 
+                if ($action === ApprovalActionType::Approved && $nextStep === null) {
+                    $this->workflowNotifier->approved($business);
+                } elseif ($action === ApprovalActionType::Rejected) {
+                    $this->workflowNotifier->rejected($business, $comment ?? '');
+                } elseif ($action === ApprovalActionType::ChangesRequested) {
+                    $this->workflowNotifier->changesRequested($business, $lockedActor, $comment ?? '');
+                }
+
                 return $instance->load(['approvable', 'steps.assignments.approver', 'actions.actor']);
             }, 5);
         } catch (ApprovalRuntimeException $exception) {
@@ -383,7 +386,8 @@ class ApprovalService
             'status' => ApprovalStepStatus::Active,
             'started_at' => $actedAt,
         ])->save();
-        $this->createAssignments($nextStep, $instance, $actedAt);
+        $newAssignments = $this->createAssignments($nextStep, $instance, $actedAt);
+        $this->workflowNotifier->assignmentsCreated($newAssignments, $business);
         $instance->forceFill(['current_step_order' => $nextStep->step_order])->save();
     }
 
@@ -464,11 +468,12 @@ class ApprovalService
         }
     }
 
+    /** @return Collection<int, ApprovalAssignment> */
     private function createAssignments(
         ApprovalStepInstance $step,
         ApprovalInstance $instance,
         \DateTimeInterface $assignedAt,
-    ): void {
+    ): Collection {
         $approvers = $this->approverResolver->resolve($step, $instance->context());
         $lockedApprovers = User::query()
             ->whereKey($approvers->modelKeys())
@@ -482,13 +487,17 @@ class ApprovalService
             throw ApprovalRuntimeException::unavailableApprover();
         }
 
+        $assignments = new Collection;
+
         foreach ($lockedApprovers as $approver) {
-            $step->assignments()->create([
+            $assignments->push($step->assignments()->create([
                 'approver_id' => $approver->id,
                 'status' => ApprovalAssignmentStatus::Pending,
                 'assigned_at' => $assignedAt,
-            ]);
+            ]));
         }
+
+        return $assignments;
     }
 
     private function updateBusinessStatus(
@@ -669,12 +678,14 @@ class ApprovalService
             throw ApprovalRuntimeException::unavailableApprover();
         }
 
+        $newAssignments = new Collection;
+
         foreach ($lockedApprovers as $approver) {
-            $currentStep->assignments()->create([
+            $newAssignments->push($currentStep->assignments()->create([
                 'approver_id' => $approver->id,
                 'status' => ApprovalAssignmentStatus::Pending,
                 'assigned_at' => $transitionedAt,
-            ]);
+            ]));
         }
 
         $instance->forceFill([
@@ -690,6 +701,7 @@ class ApprovalService
             'created_at' => $transitionedAt,
         ]);
         $this->updateBusinessStatus($business, 'IN_APPROVAL', null, $transitionedAt);
+        $this->workflowNotifier->assignmentsCreated($newAssignments, $business, true);
     }
 
     private function normalizeLifecycleComment(?string $comment): ?string

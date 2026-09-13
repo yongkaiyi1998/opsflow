@@ -9,6 +9,7 @@ use App\ApprovalMode;
 use App\ApprovalStepStatus;
 use App\ApproverType;
 use App\Exceptions\ApprovalRuntimeException;
+use App\Models\ApprovalAssignment;
 use App\Models\ApprovalInstance;
 use App\Models\ApprovalStepInstance;
 use App\Models\User;
@@ -19,12 +20,16 @@ use App\UserRole;
 use App\UserStatus;
 use App\WorkflowResolution;
 use App\WorkflowVersionStatus;
+use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\DB;
 
 class WorkflowEngine
 {
-    public function __construct(private readonly ApproverResolver $approverResolver) {}
+    public function __construct(
+        private readonly ApproverResolver $approverResolver,
+        private readonly WorkflowNotifier $workflowNotifier,
+    ) {}
 
     public function validateStart(Model $approvable, WorkflowResolution $resolution): void
     {
@@ -49,11 +54,50 @@ class WorkflowEngine
 
     public function start(Model $approvable, WorkflowResolution $resolution): ApprovalInstance
     {
+        return $this->startRuntime(
+            $approvable,
+            $resolution,
+            ApprovalActionType::Submitted,
+        );
+    }
+
+    public function startReplacement(
+        Model $approvable,
+        WorkflowResolution $resolution,
+        User $actor,
+        ApprovalInstance $previousInstance,
+        ?string $comment = null,
+    ): ApprovalInstance {
+        return $this->startRuntime(
+            $approvable,
+            $resolution,
+            ApprovalActionType::Resubmitted,
+            $actor,
+            $previousInstance,
+            $comment,
+        );
+    }
+
+    private function startRuntime(
+        Model $approvable,
+        WorkflowResolution $resolution,
+        ApprovalActionType $startupAction,
+        ?User $actor = null,
+        ?ApprovalInstance $previousInstance = null,
+        ?string $comment = null,
+    ): ApprovalInstance {
         if (! $approvable->exists || $approvable->getKey() === null) {
             throw ApprovalRuntimeException::invalidResolution();
         }
 
-        return DB::transaction(function () use ($approvable, $resolution): ApprovalInstance {
+        return DB::transaction(function () use (
+            $approvable,
+            $resolution,
+            $startupAction,
+            $actor,
+            $previousInstance,
+            $comment,
+        ): ApprovalInstance {
             $lockedApprovable = $approvable->newQuery()
                 ->whereKey($approvable->getKey())
                 ->lockForUpdate()
@@ -74,6 +118,20 @@ class WorkflowEngine
                 throw ApprovalRuntimeException::invalidResolution();
             }
 
+            $actionActor = $requester;
+
+            if ($startupAction === ApprovalActionType::Resubmitted) {
+                $actionActor = User::query()
+                    ->whereKey($actor?->id)
+                    ->where('status', UserStatus::Active->value)
+                    ->lockForUpdate()
+                    ->first();
+
+                if ($actionActor === null || $previousInstance === null) {
+                    throw ApprovalRuntimeException::invalidResolution();
+                }
+            }
+
             $steps = $group->steps;
             $this->validateSteps($steps->all());
             $startedAt = now();
@@ -87,6 +145,7 @@ class WorkflowEngine
                 'workflow_context' => $resolution->context->snapshot(),
                 'started_at' => $startedAt,
             ]);
+            $activeAssignments = new Collection;
 
             foreach ($steps as $configuredStep) {
                 $runtimeStep = $instance->steps()->create([
@@ -102,15 +161,26 @@ class WorkflowEngine
                 ]);
 
                 if ($configuredStep->step_order === 1) {
-                    $this->assignApprovers($runtimeStep, $resolution);
+                    $activeAssignments = $this->assignApprovers($runtimeStep, $resolution);
                 }
             }
 
             $instance->actions()->create([
-                'actor_id' => $requester->id,
-                'action' => ApprovalActionType::Submitted,
+                'actor_id' => $actionActor->id,
+                'action' => $startupAction,
+                'comment' => $comment,
+                'metadata' => $startupAction === ApprovalActionType::Resubmitted ? [
+                    'routing_changed' => true,
+                    'previous_approval_instance_id' => $previousInstance->id,
+                    'new_approval_instance_id' => $instance->id,
+                ] : null,
                 'created_at' => $startedAt,
             ]);
+            $this->workflowNotifier->assignmentsCreated(
+                $activeAssignments,
+                $lockedApprovable,
+                $startupAction === ApprovalActionType::Resubmitted,
+            );
 
             return $instance->load(['workflowVersion', 'workflowRuleGroup', 'steps.assignments', 'actions']);
         }, 5);
@@ -179,16 +249,20 @@ class WorkflowEngine
         }
     }
 
-    private function assignApprovers(ApprovalStepInstance $step, WorkflowResolution $resolution): void
+    /** @return Collection<int, ApprovalAssignment> */
+    private function assignApprovers(ApprovalStepInstance $step, WorkflowResolution $resolution): Collection
     {
         $assignedAt = now();
+        $assignments = new Collection;
 
         foreach ($this->approverResolver->resolve($step, $resolution->context) as $approver) {
-            $step->assignments()->create([
+            $assignments->push($step->assignments()->create([
                 'approver_id' => $approver->id,
                 'status' => ApprovalAssignmentStatus::Pending,
                 'assigned_at' => $assignedAt,
-            ]);
+            ]));
         }
+
+        return $assignments;
     }
 }

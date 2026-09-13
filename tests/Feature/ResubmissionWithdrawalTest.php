@@ -168,7 +168,12 @@ class ResubmissionWithdrawalTest extends TestCase
         $this->assertSame($changedGroup->id, $instances->last()->workflow_rule_group_id);
         $this->assertSame(1, $instances->last()->current_step_order);
         $this->assertSame($newApprover->id, $instances->last()->steps->sole()->assignments->sole()->approver_id);
+        $this->assertSame(
+            [ApprovalActionType::Resubmitted],
+            $instances->last()->actions()->orderBy('id')->get()->pluck('action')->all(),
+        );
         $action = $instances->last()->actions()->where('action', ApprovalActionType::Resubmitted)->sole();
+        $this->assertTrue($action->metadata['routing_changed']);
         $this->assertSame($instances->first()->id, $action->metadata['previous_approval_instance_id']);
         $this->assertSame($instances->last()->id, $action->metadata['new_approval_instance_id']);
         $this->assertNotSame($defaultGroup->id, $instances->last()->workflow_rule_group_id);

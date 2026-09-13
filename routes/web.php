@@ -5,11 +5,13 @@ use App\Http\Controllers\AttachmentController;
 use App\Http\Controllers\Auth\AuthenticatedSessionController;
 use App\Http\Controllers\Auth\NewPasswordController;
 use App\Http\Controllers\Auth\PasswordResetLinkController;
+use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\DepartmentController;
 use App\Http\Controllers\ExpenseClaimController;
 use App\Http\Controllers\ExpenseClaimLifecycleController;
 use App\Http\Controllers\ExpenseClaimSubmissionController;
 use App\Http\Controllers\ExpenseItemAttachmentController;
+use App\Http\Controllers\NotificationCenterController;
 use App\Http\Controllers\PurchaseRequestAttachmentController;
 use App\Http\Controllers\PurchaseRequestController;
 use App\Http\Controllers\PurchaseRequestLifecycleController;
@@ -41,7 +43,9 @@ Route::middleware('guest')->group(function (): void {
 
 Route::post('/logout', [AuthenticatedSessionController::class, 'destroy'])->middleware('auth')->name('logout');
 Route::middleware(['auth', 'auth.session', 'active'])->group(function (): void {
-    Route::view('/dashboard', 'dashboard')->name('dashboard');
+    Route::get('/dashboard', DashboardController::class)->name('dashboard');
+    Route::get('/notifications', [NotificationCenterController::class, 'index'])->name('notifications.index');
+    Route::post('/notifications/{notification}/read', [NotificationCenterController::class, 'markRead'])->name('notifications.read');
     Route::get('/attachments/{attachment}/download', [AttachmentController::class, 'download'])->name('attachments.download');
     Route::delete('/attachments/{attachment}', [AttachmentController::class, 'destroy'])->name('attachments.destroy');
     Route::get('/approvals', [ApprovalController::class, 'index'])->name('approvals.index');
