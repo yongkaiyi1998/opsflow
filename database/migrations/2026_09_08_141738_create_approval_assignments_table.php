@@ -21,7 +21,10 @@ return new class extends Migration
             $table->foreignId('delegated_from_user_id')->nullable()->constrained('users')->restrictOnDelete();
             $table->timestamps();
 
-            $table->unique(['approval_step_instance_id', 'approver_id']);
+            $table->unique(
+                ['approval_step_instance_id', 'approver_id'],
+                'approval_assignments_step_approver_unique',
+            );
             $table->index(['approver_id', 'status']);
             $table->index(['approval_step_instance_id', 'status'], 'approval_assignments_step_status_index');
         });
