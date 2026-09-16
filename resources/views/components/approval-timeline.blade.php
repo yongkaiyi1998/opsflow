@@ -1,32 +1,32 @@
 @props(['instance'])
 
-<section {{ $attributes->merge(['class' => 'card border-0 shadow-sm mb-4']) }} aria-labelledby="approval-timeline-{{ $instance->id }}">
+<section {{ $attributes->merge(['class' => 'card detail-section approval-history']) }} aria-labelledby="approval-timeline-{{ $instance->id }}">
     <div class="card-body">
-        <div class="d-flex flex-wrap justify-content-between gap-2">
-            <div><h2 class="h5" id="approval-timeline-{{ $instance->id }}">Approval timeline</h2><p class="text-secondary mb-3">Workflow version {{ $instance->workflowVersion->version }} · {{ $instance->workflowRuleGroup->name }}</p></div>
+        <div class="detail-section-heading">
+            <div><h2 id="approval-timeline-{{ $instance->id }}">Approval timeline</h2><p>Workflow version {{ $instance->workflowVersion->version }} · {{ $instance->workflowRuleGroup->name }}</p></div>
             <x-status-badge :status="$instance->status" class="align-self-start" />
         </div>
-        <ol class="list-group list-group-numbered mb-4">
+        <ol class="approval-steps">
             @foreach ($instance->steps as $step)
-                <li class="list-group-item d-flex justify-content-between align-items-start"><div class="ms-2 me-auto"><div class="fw-semibold">{{ $step->name }}</div>@forelse ($step->assignments as $assignment)<small class="text-secondary d-block">{{ $assignment->approver->name }} · {{ str($assignment->status->value)->replace('_', ' ')->title() }}</small>@empty<small class="text-secondary">Assigned when this step becomes active.</small>@endforelse</div><x-status-badge :status="$step->status" /></li>
+                <li class="approval-step approval-step-{{ strtolower($step->status->value) }}">
+                    <span class="approval-step-marker" aria-hidden="true"></span>
+                    <div class="approval-step-copy"><strong>{{ $step->name }}</strong>@forelse ($step->assignments as $assignment)<small>{{ $assignment->approver->name }} · {{ str($assignment->status->value)->replace('_', ' ')->title() }}</small>@empty<small>Assigned when this step becomes active.</small>@endforelse</div>
+                    <x-status-badge :status="$step->status" />
+                </li>
             @endforeach
         </ol>
-        <div class="vstack gap-3">
+        <div class="approval-events" aria-label="Approval activity">
             @forelse ($instance->actions as $action)
-                <div class="border-start border-3 ps-3">
-                    <div>
-                        <strong>{{ str($action->action->value)->replace('_', ' ')->title() }}</strong>
-                        @if ($action->actor)
-                            by {{ $action->actor->name }}
-                        @else
-                            by the system
-                        @endif
+                <div class="approval-event approval-event-{{ strtolower($action->action->value) }}">
+                    <span class="approval-event-marker" aria-hidden="true"></span>
+                    <div class="approval-event-content">
+                        <div class="approval-event-title"><strong>{{ str($action->action->value)->replace('_', ' ')->title() }}</strong><span>{{ $action->created_at->format('j M Y, H:i') }}</span></div>
+                        <p>@if ($action->actor){{ $action->actor->name }}@else The system @endif @if ($action->step)<span> · {{ $action->step->name }}</span>@endif</p>
+                        @if ($action->comment)<blockquote>{{ $action->comment }}</blockquote>@endif
                     </div>
-                    <div class="small text-secondary">{{ $action->created_at->format('j M Y H:i') }}@if ($action->step) · {{ $action->step->name }}@endif</div>
-                    @if ($action->comment)<div class="mt-1">{{ $action->comment }}</div>@endif
                 </div>
             @empty
-                <p class="text-secondary mb-0">No approval actions have been recorded.</p>
+                <x-empty-state title="No approval activity" description="Actions will appear here when the approval process begins." />
             @endforelse
         </div>
     </div>

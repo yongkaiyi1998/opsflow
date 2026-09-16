@@ -75,4 +75,33 @@ class MasterDataAuthorizationTest extends TestCase
         $this->actingAs(User::factory()->create())->get(route('dashboard'))
             ->assertDontSee('Administration')->assertDontSee(route('users.index'));
     }
+
+    public function test_app_navigation_respects_admin_finance_and_employee_visibility(): void
+    {
+        $this->withoutVite();
+
+        $employeeResponse = $this->actingAs(User::factory()->create())->get(route('dashboard'));
+        $employeeResponse->assertOk()
+            ->assertSee(route('purchase-requests.index'))
+            ->assertSee(route('expense-claims.index'))
+            ->assertSee(route('approvals.index'))
+            ->assertSee(route('notifications.index'))
+            ->assertDontSee(route('supplier-invoices.index'))
+            ->assertDontSee(route('departments.index'));
+
+        $financeResponse = $this->actingAs(User::factory()->create(['role' => UserRole::Finance]))->get(route('dashboard'));
+        $financeResponse->assertOk()
+            ->assertSee(route('supplier-invoices.index'))
+            ->assertSee(route('expense-claims.index'))
+            ->assertDontSee(route('departments.index'));
+
+        $adminResponse = $this->actingAs(User::factory()->admin()->create())->get(route('dashboard'));
+        $adminResponse->assertOk()
+            ->assertSee(route('supplier-invoices.index'))
+            ->assertSee(route('users.index'))
+            ->assertSee(route('departments.index'))
+            ->assertSee(route('spend-categories.index'))
+            ->assertSee(route('vendors.index'))
+            ->assertSee(route('workflow-templates.index'));
+    }
 }

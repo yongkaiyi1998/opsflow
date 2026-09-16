@@ -1,8 +1,11 @@
+<section class="form-section">
+<div class="form-section-heading"><h2>Workflow identity</h2><p>Name and identify the module this approval policy applies to.</p></div>
 <div class="row g-3">
     <div class="col-md-8"><label class="form-label" for="name">Name</label><input class="form-control @error('name') is-invalid @enderror" id="name" name="name" value="{{ old('name', $workflowTemplate?->name) }}" required maxlength="255"></div>
     <div class="col-md-4"><label class="form-label" for="code">Code</label><input class="form-control text-uppercase @error('code') is-invalid @enderror" id="code" name="code" value="{{ old('code', $workflowTemplate?->code) }}" required maxlength="50"></div>
     <div class="col-md-6"><label class="form-label" for="module_type">Module</label><select class="form-select @error('module_type') is-invalid @enderror" id="module_type" name="module_type" required>@foreach (App\WorkflowModuleType::cases() as $type)<option value="{{ $type->value }}" @selected(old('module_type', $workflowTemplate?->module_type?->value) === $type->value)>{{ $type->label() }}</option>@endforeach</select></div>
     <div class="col-md-6"><label class="form-label" for="status">Status</label><select class="form-select" id="status" name="status" required>@foreach (App\MasterDataStatus::cases() as $status)<option value="{{ $status->value }}" @selected(old('status', $workflowTemplate?->status?->value ?? App\MasterDataStatus::Active->value) === $status->value)>{{ ucfirst(strtolower($status->value)) }}</option>@endforeach</select></div>
-    <div class="col-12"><label class="form-label" for="description">Description</label><textarea class="form-control @error('description') is-invalid @enderror" id="description" name="description" rows="3" maxlength="2000">{{ old('description', $workflowTemplate?->description) }}</textarea></div>
 </div>
-<div class="d-flex gap-2 mt-4"><button class="btn btn-primary" type="submit">Save workflow</button><a class="btn btn-outline-secondary" href="{{ route('workflow-templates.index') }}">Cancel</a></div>
+</section>
+<section class="form-section"><div class="form-section-heading"><h2>Purpose</h2><p>Help administrators understand when this workflow should be used.</p></div><label class="form-label" for="description">Description</label><textarea class="form-control @error('description') is-invalid @enderror" id="description" name="description" rows="4" maxlength="2000">{{ old('description', $workflowTemplate?->description) }}</textarea></section>
+<div class="form-actions"><button class="btn btn-primary" type="submit">Save workflow</button><a class="btn btn-outline-secondary" href="{{ $workflowTemplate ? route('workflow-templates.show', $workflowTemplate) : route('workflow-templates.index') }}">Cancel</a></div>

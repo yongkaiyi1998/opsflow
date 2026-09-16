@@ -9,4 +9,4 @@
         default => 'secondary',
     };
 @endphp
-<span {{ $attributes->class(['badge', "text-bg-{$tone}"]) }}>{{ str($value)->replace('_', ' ')->title() }}</span>
+<span {{ $attributes->class(['status-badge', "status-badge-{$tone}"]) }}>{{ str($value)->replace('_', ' ')->title() }}</span>

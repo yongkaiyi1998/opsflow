@@ -9,50 +9,75 @@
 </head>
 <body>
 @auth
-    <a class="visually-hidden-focusable position-absolute top-0 start-0 m-2 btn btn-light" href="#main-content">Skip to content</a>
-    <header class="navbar navbar-dark bg-dark px-3 py-3 shadow-sm flex-wrap gap-3">
-        <a class="navbar-brand fw-bold mb-0" href="{{ route('dashboard') }}">OpsFlow <span class="d-none d-lg-inline fw-normal text-white-50 fs-6 ms-2">Spend management & approvals</span></a>
-        <div class="d-flex align-items-center gap-2 gap-sm-3 text-white ms-auto">
-            <a class="btn btn-outline-light btn-sm position-relative" href="{{ route('notifications.index') }}">Notifications @if ($unreadNotificationCount > 0)<span class="badge rounded-pill text-bg-danger">{{ $unreadNotificationCount }}</span>@endif</a>
-            <span class="d-none d-sm-inline">{{ auth()->user()->name }}</span>
-            <form method="POST" action="{{ route('logout') }}">
-                @csrf
-                <button class="btn btn-outline-light btn-sm" type="submit">Sign out</button>
-            </form>
+    <a class="visually-hidden-focusable skip-link" href="#main-content">Skip to content</a>
+
+    <aside class="app-sidebar-desktop d-none d-lg-flex">
+        <a class="app-brand" href="{{ route('dashboard') }}">
+            <span class="app-brand-mark" aria-hidden="true">O</span>
+            <span><strong>OpsFlow</strong><small>Spend operations</small></span>
+        </a>
+        @include('partials.app-navigation')
+        <div class="app-sidebar-footer">
+            <span class="app-user-avatar" aria-hidden="true">{{ str(auth()->user()->name)->substr(0, 1)->upper() }}</span>
+            <span class="min-w-0"><strong class="text-truncate d-block">{{ auth()->user()->name }}</strong><small>{{ str(auth()->user()->role->value)->lower()->title() }}</small></span>
         </div>
-    </header>
-    <div class="d-md-flex app-shell">
-        <aside class="app-sidebar bg-white p-3">
-            <nav aria-label="Main navigation" class="nav nav-pills flex-column">
-                <a class="nav-link {{ request()->routeIs('dashboard') ? 'active' : '' }}" href="{{ route('dashboard') }}">Dashboard</a>
-                <a class="nav-link {{ request()->routeIs('approvals.*') || request()->routeIs('approval-assignments.*') ? 'active' : '' }}" href="{{ route('approvals.index') }}">Approval inbox</a>
-                <a class="nav-link {{ request()->routeIs('purchase-requests.*') || request()->routeIs('purchase-request-attachments.*') ? 'active' : '' }}" href="{{ route('purchase-requests.index') }}">Purchase requests</a>
-                @can('viewAny', App\Models\SupplierInvoice::class)
-                    <a class="nav-link {{ request()->routeIs('supplier-invoices.*') || request()->routeIs('supplier-invoice-attachments.*') ? 'active' : '' }}" href="{{ route('supplier-invoices.index') }}">Supplier invoices</a>
-                @endcan
-                @can('viewAny', App\Models\ExpenseClaim::class)
-                    <a class="nav-link {{ request()->routeIs('expense-claims.*') || request()->routeIs('expense-item-attachments.*') ? 'active' : '' }}" href="{{ route('expense-claims.index') }}">Expense claims</a>
-                @endcan
-                @can('viewAny', App\Models\Department::class)
-                    <span class="text-uppercase text-secondary small fw-semibold mt-4 mb-2 px-3">Administration</span>
-                    <a class="nav-link {{ request()->routeIs('users.*') ? 'active' : '' }}" href="{{ route('users.index') }}">Users</a>
-                    <a class="nav-link {{ request()->routeIs('departments.*') ? 'active' : '' }}" href="{{ route('departments.index') }}">Departments</a>
-                    <a class="nav-link {{ request()->routeIs('spend-categories.*') ? 'active' : '' }}" href="{{ route('spend-categories.index') }}">Spend categories</a>
-                    <a class="nav-link {{ request()->routeIs('vendors.*') ? 'active' : '' }}" href="{{ route('vendors.index') }}">Vendors</a>
-                    <a class="nav-link {{ request()->routeIs('workflow-*') ? 'active' : '' }}" href="{{ route('workflow-templates.index') }}">Workflows</a>
-                @endcan
-            </nav>
-        </aside>
-        <main class="app-main flex-grow-1 p-3 p-md-5" id="main-content">
-            @include('partials.messages')
-            @yield('content')
+    </aside>
+
+    <div class="app-content">
+        <header class="app-topbar">
+            <button class="btn app-menu-button d-lg-none" type="button" data-bs-toggle="offcanvas" data-bs-target="#appNavigation" aria-controls="appNavigation" aria-label="Open navigation">
+                <span></span><span></span><span></span>
+            </button>
+            <a class="app-mobile-brand d-lg-none" href="{{ route('dashboard') }}">OpsFlow</a>
+            <span class="app-topbar-context d-none d-lg-inline">Operations workspace</span>
+            <div class="d-flex align-items-center gap-2 ms-auto">
+                <a class="topbar-notifications" href="{{ route('notifications.index') }}">
+                    <span>Notifications</span>
+                    @if ($unreadNotificationCount > 0)
+                        <span class="topbar-count">{{ $unreadNotificationCount }}</span>
+                    @endif
+                </a>
+                <div class="dropdown">
+                    <button class="btn app-user-menu dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false">{{ auth()->user()->name }}</button>
+                    <div class="dropdown-menu dropdown-menu-end">
+                        <div class="px-3 py-2 border-bottom mb-1">
+                            <strong class="d-block">{{ auth()->user()->name }}</strong>
+                            <small class="text-secondary">{{ auth()->user()->email }}</small>
+                        </div>
+                        <form method="POST" action="{{ route('logout') }}">
+                            @csrf
+                            <button class="dropdown-item" type="submit">Sign out</button>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </header>
+
+        <main class="app-main" id="main-content">
+            <div class="app-page-container">
+                @include('partials.messages')
+                @yield('content')
+            </div>
         </main>
+    </div>
+
+    <div class="offcanvas offcanvas-start app-navigation-drawer" tabindex="-1" id="appNavigation" aria-labelledby="appNavigationLabel">
+        <div class="offcanvas-header">
+            <a class="app-brand" id="appNavigationLabel" href="{{ route('dashboard') }}">
+                <span class="app-brand-mark" aria-hidden="true">O</span>
+                <span><strong>OpsFlow</strong><small>Spend operations</small></span>
+            </a>
+            <button type="button" class="btn-close btn-close-white" data-bs-dismiss="offcanvas" aria-label="Close navigation"></button>
+        </div>
+        <div class="offcanvas-body">
+            @include('partials.app-navigation')
+        </div>
     </div>
 @else
     <main class="container py-5">
         <div class="auth-card mx-auto">
             <div class="mb-4 text-center"><span class="h3 fw-bold">OpsFlow</span><p class="text-secondary mt-2">Spend management & approvals</p></div>
-            <div class="card border-0 shadow-sm"><div class="card-body p-4">
+            <div class="card auth-surface"><div class="card-body p-4">
                 <h1 class="h4 mb-4">@yield('title')</h1>
                 @include('partials.messages')
                 @yield('content')

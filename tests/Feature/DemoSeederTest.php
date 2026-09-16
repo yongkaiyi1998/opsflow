@@ -91,7 +91,7 @@ class DemoSeederTest extends TestCase
         $this->actingAs(User::query()->where('email', 'employee@opsflow.test')->firstOrFail())
             ->get(route('purchase-requests.index'))
             ->assertOk()
-            ->assertSee('text-bg-warning', false)
-            ->assertSee('text-bg-success', false);
+            ->assertSee('status-badge-warning', false)
+            ->assertSee('status-badge-success', false);
     }
 }

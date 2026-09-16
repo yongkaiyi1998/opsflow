@@ -1,11 +1,33 @@
 @extends('layouts.app')
 @section('title', 'Workflows')
 @section('content')
-<div class="d-flex flex-wrap justify-content-between align-items-center gap-3 mb-4"><div><h1 class="h2 mb-1">Workflow configuration</h1><p class="text-secondary mb-0">Manage versioned approval policies for each spend module.</p></div><a class="btn btn-primary" href="{{ route('workflow-templates.create') }}">Add workflow</a></div>
-<form class="row g-2 mb-4" method="GET"><div class="col-md-5"><label class="visually-hidden" for="search">Search workflows</label><input class="form-control" id="search" name="search" value="{{ $search }}" placeholder="Search name or code"></div><div class="col-auto"><button class="btn btn-outline-secondary" type="submit">Search</button></div></form>
-<div class="card border-0 shadow-sm"><div class="table-responsive"><table class="table table-hover align-middle mb-0"><thead class="table-light"><tr><th>Workflow</th><th>Module</th><th>Status</th><th>Current version</th><th class="text-end">Action</th></tr></thead><tbody>
-@forelse ($templates as $template)
-<tr><td><div class="fw-semibold">{{ $template->name }}</div><small class="text-secondary">{{ $template->code }}</small></td><td>{{ $template->module_type->label() }}</td><td><x-status-badge :status="$template->status" /></td><td>@php($published = $template->versions->firstWhere('status', App\WorkflowVersionStatus::Published)){{ $published ? 'Version '.$published->version : 'Not published' }}</td><td class="text-end"><a class="btn btn-sm btn-outline-primary" href="{{ route('workflow-templates.show', $template) }}">Manage</a></td></tr>
-@empty<tr><td class="text-center text-secondary py-5" colspan="5">No workflow templates found.</td></tr>@endforelse
-</tbody></table></div></div><div class="mt-3">{{ $templates->links() }}</div>
+<x-page-header title="Workflow configuration" description="Manage versioned approval policies for each spend module.">
+    <x-slot:actions><a class="btn btn-primary" href="{{ route('workflow-templates.create') }}">Add workflow</a></x-slot:actions>
+</x-page-header>
+<form class="filter-panel" method="GET"><div class="row g-2 align-items-center"><div class="col-lg-6"><label class="visually-hidden" for="search">Search workflows</label><input class="form-control" id="search" name="search" value="{{ $search }}" placeholder="Search name or code"></div><div class="col-md-auto"><button class="btn btn-outline-secondary" type="submit">Search</button></div>@if ($search)<div class="col-md-auto"><a class="btn btn-link" href="{{ route('workflow-templates.index') }}">Clear</a></div>@endif</div></form>
+<div class="workflow-template-grid">
+    @forelse ($templates as $template)
+        @php
+            $published = $template->versions->firstWhere('status', App\WorkflowVersionStatus::Published);
+            $draftCount = $template->versions->where('status', App\WorkflowVersionStatus::Draft)->count();
+        @endphp
+        <article class="card workflow-template-card">
+            <div class="card-body">
+                <div class="workflow-template-card-header"><span class="workflow-module-label">{{ $template->module_type->label() }}</span><x-status-badge :status="$template->status" /></div>
+                <h2><a href="{{ route('workflow-templates.show', $template) }}">{{ $template->name }}</a></h2>
+                <code>{{ $template->code }}</code>
+                <p>{{ $template->description ?: 'No workflow description provided.' }}</p>
+                <div class="workflow-version-summary">
+                    <div><span>Published</span><strong>{{ $published ? 'Version '.$published->version : 'None' }}</strong></div>
+                    <div><span>Drafts</span><strong>{{ $draftCount }}</strong></div>
+                    <div><span>Total versions</span><strong>{{ $template->versions->count() }}</strong></div>
+                </div>
+                <a class="btn btn-sm btn-outline-primary" href="{{ route('workflow-templates.show', $template) }}">Manage workflow</a>
+            </div>
+        </article>
+    @empty
+        <div class="card grid-column-full"><x-empty-state :title="$search ? 'No matching workflows' : 'No workflows yet'" :description="$search ? 'Try a different workflow name or code.' : 'Add the first workflow template to configure approval routing.'" /></div>
+    @endforelse
+</div>
+<div class="mt-3">{{ $templates->links() }}</div>
 @endsection
