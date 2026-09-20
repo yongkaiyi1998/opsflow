@@ -101,7 +101,7 @@ Avoid storing unnecessary secrets or full sensitive documents.
 
 ## Batch Document Intake
 
-Invoice intake uses a separate lifecycle from `SupplierInvoice`.
+Invoice and receipt intake use the same generic private-document lifecycle while remaining separate from authoritative `SupplierInvoice` and `ExpenseClaim` records.
 
 Upload N documents  
 → IntakeBatch  
@@ -111,6 +111,8 @@ Upload N documents
 → Human verifies  
 → SupplierInvoice DRAFT  
 → Normal OpsFlow workflow
+
+Expense Receipt RI01 stops at `NEEDS_VERIFICATION`; it does not create an Expense Claim or item. One receipt batch is reserved to become one claim, with each verified receipt becoming one item in the later verification phase.
 
 One failed document must not fail the whole batch.
 
@@ -128,7 +130,7 @@ AI processing must not add AI-specific states to the Supplier Invoice business l
 
 ## Document Extraction
 
-Invoices are the first supported document type.
+Supported document types are Supplier Invoice and Expense Receipt.
 
 Candidate fields may include:
 - vendor
@@ -149,6 +151,8 @@ Image/PDF handling may use OCR, multimodal models, or provider-specific capabili
 OpsFlow does not require one fixed OCR strategy.
 
 AI extraction produces candidate data only.
+
+Receipt candidates contain merchant, transaction date, optional description, currency, gross amount, and informational tax. They never contain employee, department, category, routing, or reimbursement decisions.
 
 ## Human Verification
 

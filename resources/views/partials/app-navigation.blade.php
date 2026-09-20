@@ -12,6 +12,9 @@
         @can('viewAny', App\Models\ExpenseClaim::class)
             <a class="app-nav-link {{ request()->routeIs('expense-claims.*') || request()->routeIs('expense-item-attachments.*') ? 'active' : '' }}" href="{{ route('expense-claims.index') }}" @if (request()->routeIs('expense-claims.*') || request()->routeIs('expense-item-attachments.*')) aria-current="page" @endif>Expense Claims</a>
         @endcan
+        @can('create', App\Models\ExpenseClaim::class)
+            <a class="app-nav-link {{ request()->routeIs('expense-receipt-intakes.*') ? 'active' : '' }}" href="{{ route('expense-receipt-intakes.index') }}" @if (request()->routeIs('expense-receipt-intakes.*')) aria-current="page" @endif>Receipt Intake</a>
+        @endcan
     </div>
 
     <div class="app-nav-section">

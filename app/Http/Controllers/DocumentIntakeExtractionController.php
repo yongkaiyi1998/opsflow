@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\DocumentIntakeStatus;
+use App\IntakeDocumentType;
 use App\Models\DocumentIntake;
 use App\Models\IntakeBatch;
 use App\Services\DocumentExtractionService;
@@ -19,6 +20,10 @@ class DocumentIntakeExtractionController extends Controller
         Gate::authorize('view', $intakeBatch);
         Gate::authorize('process', $documentIntake);
         abort_unless($documentIntake->intakeBatch()->whereKey($intakeBatch->getKey())->exists(), 404);
+        $expectedType = request()->routeIs('expense-receipt-intakes.*')
+            ? IntakeDocumentType::ExpenseReceipt
+            : IntakeDocumentType::SupplierInvoice;
+        abort_unless($documentIntake->document_type === $expectedType, 404);
 
         if (! config('ai.enabled')) {
             return back()->with('error', 'AI processing is disabled. The document remains pending.');

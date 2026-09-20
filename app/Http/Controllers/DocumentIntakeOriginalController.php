@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\IntakeDocumentType;
 use App\Models\DocumentIntake;
 use App\Models\IntakeBatch;
 use Illuminate\Support\Facades\Gate;
@@ -19,6 +20,7 @@ class DocumentIntakeOriginalController extends Controller
         Gate::authorize('view', $intakeBatch);
         Gate::authorize('view', $documentIntake);
         abort_unless($documentIntake->intake_batch_id === $intakeBatch->id, 404);
+        $this->authorizeRouteType($documentIntake);
         abort_if(
             $documentIntake->disk === 'public'
                 || config("filesystems.disks.{$documentIntake->disk}.visibility") === 'public',
@@ -35,5 +37,16 @@ class DocumentIntakeOriginalController extends Controller
             $documentIntake->path,
             $documentIntake->original_name,
         );
+    }
+
+    private function authorizeRouteType(DocumentIntake $documentIntake): void
+    {
+        if (request()->routeIs('expense-receipt-intakes.*')) {
+            abort_unless($documentIntake->document_type === IntakeDocumentType::ExpenseReceipt, 404);
+
+            return;
+        }
+
+        abort_unless($documentIntake->document_type === IntakeDocumentType::SupplierInvoice, 404);
     }
 }

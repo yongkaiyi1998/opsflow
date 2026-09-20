@@ -2,6 +2,7 @@
 
 namespace App\Policies;
 
+use App\IntakeDocumentType;
 use App\Models\IntakeBatch;
 use App\Models\User;
 use App\UserRole;
@@ -21,6 +22,21 @@ class IntakeBatchPolicy
      */
     public function view(User $user, IntakeBatch $intakeBatch): bool
     {
+        $containsReceipt = $intakeBatch->documentIntakes()
+            ->where('document_type', IntakeDocumentType::ExpenseReceipt->value)
+            ->exists();
+
+        if ($containsReceipt) {
+            $containsOtherDocumentType = $intakeBatch->documentIntakes()
+                ->where('document_type', '!=', IntakeDocumentType::ExpenseReceipt->value)
+                ->exists();
+
+            return ! $containsOtherDocumentType
+                && $user->isActive()
+                && $user->department_id !== null
+                && $intakeBatch->uploaded_by === $user->id;
+        }
+
         return $this->canAccess($user);
     }
 

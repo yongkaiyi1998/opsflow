@@ -17,6 +17,8 @@ use App\Http\Controllers\ExpenseClaimController;
 use App\Http\Controllers\ExpenseClaimLifecycleController;
 use App\Http\Controllers\ExpenseClaimSubmissionController;
 use App\Http\Controllers\ExpenseItemAttachmentController;
+use App\Http\Controllers\ExpenseReceiptIntakeController;
+use App\Http\Controllers\ExpenseReceiptIntakeResultController;
 use App\Http\Controllers\InvoiceIntakeController;
 use App\Http\Controllers\NotificationCenterController;
 use App\Http\Controllers\PurchaseRequestAttachmentController;
@@ -103,6 +105,18 @@ Route::middleware(['auth', 'auth.session', 'active'])->group(function (): void {
     Route::post('invoice-intakes/{intake_batch}/documents/{document_intake}/verify', DocumentIntakeVerificationController::class)
         ->scopeBindings()
         ->name('invoice-intakes.documents.verify');
+    Route::resource('expense-receipt-intakes', ExpenseReceiptIntakeController::class)
+        ->parameters(['expense-receipt-intakes' => 'intake_batch'])
+        ->only(['index', 'create', 'store', 'show']);
+    Route::get('expense-receipt-intakes/{intake_batch}/documents/{document_intake}/original', DocumentIntakeOriginalController::class)
+        ->scopeBindings()
+        ->name('expense-receipt-intakes.documents.original');
+    Route::get('expense-receipt-intakes/{intake_batch}/documents/{document_intake}', ExpenseReceiptIntakeResultController::class)
+        ->scopeBindings()
+        ->name('expense-receipt-intakes.documents.show');
+    Route::post('expense-receipt-intakes/{intake_batch}/documents/{document_intake}/extract', DocumentIntakeExtractionController::class)
+        ->scopeBindings()
+        ->name('expense-receipt-intakes.documents.extract');
     Route::post('expense-claims/category-suggestion', [ExpenseClaimCategorySuggestionController::class, 'create'])
         ->name('expense-claims.category-suggestion.create');
     Route::match(['post', 'put'], 'expense-claims/{expense_claim}/category-suggestion', [ExpenseClaimCategorySuggestionController::class, 'update'])

@@ -7,7 +7,7 @@ use App\Models\IntakeBatch;
 use App\Models\User;
 use Illuminate\Http\UploadedFile;
 
-class InvoiceIntakeService
+class ExpenseReceiptIntakeService
 {
     public function __construct(private readonly DocumentIntakeUploadService $uploads) {}
 
@@ -18,7 +18,7 @@ class InvoiceIntakeService
             $files,
             $submissionKey,
             $uploader,
-            IntakeDocumentType::SupplierInvoice,
+            IntakeDocumentType::ExpenseReceipt,
         );
     }
 }

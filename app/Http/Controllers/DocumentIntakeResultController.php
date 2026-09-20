@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\DocumentIntakeStatus;
+use App\IntakeDocumentType;
 use App\MasterDataStatus;
 use App\Models\Department;
 use App\Models\DocumentIntake;
@@ -25,6 +26,7 @@ class DocumentIntakeResultController extends Controller
         Gate::authorize('view', $intakeBatch);
         Gate::authorize('view', $documentIntake);
         abort_unless($documentIntake->intakeBatch()->whereKey($intakeBatch->getKey())->exists(), 404);
+        abort_unless($documentIntake->document_type === IntakeDocumentType::SupplierInvoice, 404);
         $documentIntake->load(['aiInteraction', 'supplierInvoice', 'supplierInvoiceAttachment', 'verifiedBy']);
         $vendorMatches = [];
         $duplicateMatches = [];

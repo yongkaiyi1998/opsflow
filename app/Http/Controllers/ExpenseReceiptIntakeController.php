@@ -2,35 +2,34 @@
 
 namespace App\Http\Controllers;
 
-use App\Http\Requests\StoreIntakeBatchRequest;
+use App\Http\Requests\StoreExpenseReceiptIntakeRequest;
 use App\IntakeDocumentType;
+use App\Models\ExpenseClaim;
 use App\Models\IntakeBatch;
-use App\Services\InvoiceIntakeService;
+use App\Services\ExpenseReceiptIntakeService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Str;
 use Illuminate\View\View;
 
-class InvoiceIntakeController extends Controller
+class ExpenseReceiptIntakeController extends Controller
 {
     /**
      * Display a listing of the resource.
      */
     public function index(): View
     {
-        Gate::authorize('viewAny', IntakeBatch::class);
+        Gate::authorize('create', ExpenseClaim::class);
         $intakeBatches = IntakeBatch::query()
+            ->whereBelongsTo(request()->user(), 'uploadedBy')
             ->whereHas('documentIntakes', fn ($query) => $query
-                ->where('document_type', IntakeDocumentType::SupplierInvoice->value))
-            ->with([
-                'uploadedBy',
-                'documentIntakes:id,intake_batch_id,status',
-            ])
+                ->where('document_type', IntakeDocumentType::ExpenseReceipt->value))
+            ->with(['documentIntakes:id,intake_batch_id,status'])
             ->latest()
             ->latest('id')
             ->paginate(15);
 
-        return view('invoice-intakes.index', compact('intakeBatches'));
+        return view('expense-receipt-intakes.index', compact('intakeBatches'));
     }
 
     /**
@@ -38,24 +37,26 @@ class InvoiceIntakeController extends Controller
      */
     public function create(): View
     {
-        Gate::authorize('create', IntakeBatch::class);
+        Gate::authorize('create', ExpenseClaim::class);
 
-        return view('invoice-intakes.create', ['submissionKey' => Str::uuid()->toString()]);
+        return view('expense-receipt-intakes.create', ['submissionKey' => Str::uuid()->toString()]);
     }
 
     /**
      * Store a newly created resource in storage.
      */
-    public function store(StoreIntakeBatchRequest $request, InvoiceIntakeService $service): RedirectResponse
-    {
+    public function store(
+        StoreExpenseReceiptIntakeRequest $request,
+        ExpenseReceiptIntakeService $service,
+    ): RedirectResponse {
         $batch = $service->createBatch(
             $request->file('documents', []),
             $request->string('submission_key')->toString(),
             $request->user(),
         );
 
-        return redirect()->route('invoice-intakes.show', $batch)
-            ->with('success', 'Invoice intake batch uploaded.');
+        return redirect()->route('expense-receipt-intakes.show', $batch)
+            ->with('success', 'Receipt intake batch uploaded.');
     }
 
     /**
@@ -67,9 +68,9 @@ class InvoiceIntakeController extends Controller
         $intakeBatch->load(['uploadedBy', 'documentIntakes']);
         abort_unless($intakeBatch->documentIntakes->isNotEmpty()
             && $intakeBatch->documentIntakes->every(
-                fn ($document): bool => $document->document_type === IntakeDocumentType::SupplierInvoice,
+                fn ($document): bool => $document->document_type === IntakeDocumentType::ExpenseReceipt,
             ), 404);
 
-        return view('invoice-intakes.show', compact('intakeBatch'));
+        return view('expense-receipt-intakes.show', compact('intakeBatch'));
     }
 }

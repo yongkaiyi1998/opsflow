@@ -1694,6 +1694,14 @@ AI remains advisory.
 
 Deterministic business rules and humans remain authoritative.
 
+## Document Intelligence Expansion
+
+```text
+RI01 ✅ Expense Receipt Intake & Extraction
+RI02 ← Next: Human Verification → Expense Claim Draft
+RI03 Receipt Hardening, Tests & Demo Polish
+```
+
 ---
 
 # 5. Codex Execution Style

@@ -1070,7 +1070,7 @@ AiProvider
 Compatible cloud or local HTTP endpoint
 ```
 
-Implemented features include private batch Supplier Invoice extraction with human verification, vendor and duplicate assistance, category suggestions, record summaries and attention observations, workflow explanations, and editable writing assistance. `AiInteraction` records compact execution traces but is not authoritative business history. Detailed rules live in `docs/architecture/ai-architecture.md`.
+Implemented features include private batch Supplier Invoice extraction with human verification, private Expense Receipt extraction to read-only candidates, vendor and duplicate assistance, category suggestions, record summaries and attention observations, workflow explanations, and editable writing assistance. Both document types reuse `IntakeBatch`, `DocumentIntake`, the extraction queue, and `AiInteraction`; receipt-to-claim verification remains a separate later boundary. `AiInteraction` records compact execution traces but is not authoritative business history. Detailed rules live in `docs/architecture/ai-architecture.md`.
 
 ---
 
@@ -1088,7 +1088,7 @@ Examples:
 
 AI may:
 
-- extract invoice fields
+- extract invoice and receipt fields
 - summarize requests
 - suggest categories
 - highlight possible anomalies
@@ -1318,7 +1318,7 @@ Audit Trail
 Database Notifications
 
 Optional AI Assistance
-Batch Supplier Invoice Intake
+Batch Supplier Invoice and Expense Receipt Intake
 Human Verification
 
 Feature Tests
