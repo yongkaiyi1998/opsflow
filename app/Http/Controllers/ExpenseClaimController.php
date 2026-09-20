@@ -12,6 +12,7 @@ use App\MasterDataStatus;
 use App\Models\ExpenseClaim;
 use App\Models\SpendCategory;
 use App\Services\ExpenseClaimService;
+use App\Services\RecordAnalysisService;
 use App\UserRole;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Collection;
@@ -83,7 +84,7 @@ class ExpenseClaimController extends Controller
         return redirect()->route('expense-claims.show', $expenseClaim)->with('success', 'Expense claim created. Add a receipt to every item before submission.');
     }
 
-    public function show(ExpenseClaim $expenseClaim): View
+    public function show(ExpenseClaim $expenseClaim, RecordAnalysisService $analysis): View
     {
         Gate::authorize('view', $expenseClaim);
         $expenseClaim->load([
@@ -92,7 +93,11 @@ class ExpenseClaimController extends Controller
             'approvalInstances.steps.assignments.approver', 'approvalInstances.actions.actor', 'approvalInstances.actions.step',
         ]);
 
-        return view('expense-claims.show', compact('expenseClaim'));
+        return view('expense-claims.show', [
+            'expenseClaim' => $expenseClaim,
+            'aiAnalysis' => $analysis->latest($expenseClaim),
+            'systemChecks' => $analysis->systemChecks($expenseClaim),
+        ]);
     }
 
     public function edit(ExpenseClaim $expenseClaim): View

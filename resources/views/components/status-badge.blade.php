@@ -2,10 +2,10 @@
 @php
     $value = $status instanceof \BackedEnum ? $status->value : (string) $status;
     $tone = match ($value) {
-        'ACTIVE', 'APPROVED', 'COMPLETED', 'PUBLISHED' => 'success',
-        'BLOCKED', 'REJECTED' => 'danger',
-        'CHANGES_REQUESTED' => 'warning',
-        'IN_APPROVAL', 'PENDING' => 'primary',
+        'ACTIVE', 'APPROVED', 'COMPLETED', 'PUBLISHED', 'VERIFIED' => 'success',
+        'BLOCKED', 'REJECTED', 'FAILED' => 'danger',
+        'CHANGES_REQUESTED', 'NEEDS_VERIFICATION' => 'warning',
+        'IN_APPROVAL', 'PENDING', 'PROCESSING' => 'primary',
         default => 'secondary',
     };
 @endphp

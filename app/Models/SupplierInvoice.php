@@ -49,6 +49,11 @@ class SupplierInvoice extends Model
         return $this->morphMany(ApprovalInstance::class, 'approvable')->latest('id');
     }
 
+    public function documentIntakes(): HasMany
+    {
+        return $this->hasMany(DocumentIntake::class);
+    }
+
     public function isDraft(): bool
     {
         return $this->status === SupplierInvoiceStatus::Draft;

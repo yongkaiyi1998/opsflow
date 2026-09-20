@@ -6,6 +6,9 @@
         @can('viewAny', App\Models\SupplierInvoice::class)
             <a class="app-nav-link {{ request()->routeIs('supplier-invoices.*') || request()->routeIs('supplier-invoice-attachments.*') ? 'active' : '' }}" href="{{ route('supplier-invoices.index') }}" @if (request()->routeIs('supplier-invoices.*') || request()->routeIs('supplier-invoice-attachments.*')) aria-current="page" @endif>Supplier Invoices</a>
         @endcan
+        @can('viewAny', App\Models\IntakeBatch::class)
+            <a class="app-nav-link {{ request()->routeIs('invoice-intakes.*') ? 'active' : '' }}" href="{{ route('invoice-intakes.index') }}" @if (request()->routeIs('invoice-intakes.*')) aria-current="page" @endif>Invoice Intake</a>
+        @endcan
         @can('viewAny', App\Models\ExpenseClaim::class)
             <a class="app-nav-link {{ request()->routeIs('expense-claims.*') || request()->routeIs('expense-item-attachments.*') ? 'active' : '' }}" href="{{ route('expense-claims.index') }}" @if (request()->routeIs('expense-claims.*') || request()->routeIs('expense-item-attachments.*')) aria-current="page" @endif>Expense Claims</a>
         @endcan

@@ -34,6 +34,12 @@
             <div class="money-summary"><dl><div><dt>Subtotal</dt><dd>{{ App\Support\Money::of($purchaseRequest->subtotal)->format($purchaseRequest->currency) }}</dd></div><div><dt>Tax</dt><dd>{{ App\Support\Money::of($purchaseRequest->tax_amount)->format($purchaseRequest->currency) }}</dd></div><div class="money-summary-total"><dt>Total</dt><dd>{{ App\Support\Money::of($purchaseRequest->total_amount)->format($purchaseRequest->currency) }}</dd></div></dl></div>
         </div></section>
 
+        <x-record-analysis
+            :analysis="$aiAnalysis"
+            :system-checks="$systemChecks"
+            :generate-url="route('purchase-requests.ai-analysis', $purchaseRequest)"
+        />
+
         <section class="card detail-section"><div class="card-body">
             <div class="detail-section-heading"><div><h2>Attachments</h2><p>Documents are stored privately and checked before download.</p></div></div>
             <div class="attachment-list">

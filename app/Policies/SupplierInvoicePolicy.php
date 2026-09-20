@@ -62,7 +62,8 @@ class SupplierInvoicePolicy
     {
         return $this->canManage($user)
             && $supplierInvoice->status === SupplierInvoiceStatus::Draft
-            && ! $supplierInvoice->approvalInstances()->exists();
+            && ! $supplierInvoice->approvalInstances()->exists()
+            && ! $supplierInvoice->documentIntakes()->exists();
     }
 
     public function submit(User $user, SupplierInvoice $supplierInvoice): bool

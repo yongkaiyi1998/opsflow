@@ -14,6 +14,7 @@ Teams often coordinate spend approvals through email and chat, making it hard to
 - Resubmission and withdrawal without deleting prior decisions.
 - Private attachments, database notifications, audit records, and operational dashboards.
 - Preserved references and history for every submitted business record.
+- Optional AI-assisted invoice intake, summaries, category suggestions, workflow explanations, and editable writing help.
 
 ## V1 modules
 
@@ -25,6 +26,7 @@ Teams often coordinate spend approvals through email and chat, making it hard to
 | Workflow Configuration | Draft versions, ordered rule groups and steps, validation, publishing, cloning, and immutable published versions. |
 | Approval Operations | Sequential `ANY` steps, persisted assignments, first-committed-action-wins decisions, next-step activation, and final outcomes. |
 | Operations | Role-aware dashboard summaries, approval timelines, notifications, and focused activity auditing. |
+| AI Assistance | Batch invoice extraction, human verification, vendor/category suggestions, duplicate flags, record summaries, workflow explanations, and editable drafts. |
 
 ## Architecture
 
@@ -98,6 +100,25 @@ Database money columns use `DECIMAL(15,2)`. Supplier Invoice quantity uses `DECI
 
 The backend recalculates every subtotal, tax, and total. Expense item amounts are gross, so informational tax is not added again. Frontend totals, ownership, status, department, and approval fields are never treated as authoritative.
 
+### AI architecture
+
+AI is an optional provider-independent assistance layer:
+
+```text
+Feature service → AiExecutionService → AiProvider → OpenAI-compatible HTTP endpoint
+```
+
+The same provider supports compatible cloud services and local or LAN runtimes such as Ollama, LM Studio, or vLLM. Model output is validated against feature-specific schemas before use. `AiInteraction` stores compact trace metadata and validated output; it does not replace business audit history.
+
+Supplier Invoice intake keeps unverified extraction separate from authoritative records:
+
+```text
+Private batch upload → queued extraction → candidate data → human verification
+→ SupplierInvoice DRAFT → normal deterministic submission and approval
+```
+
+AI extracts, summarizes, suggests, explains, and flags. Deterministic services validate totals and route workflows. Humans verify data and submit approval decisions. Setting `AI_ENABLED=false` removes AI actions while manual records, workflows, approvals, and private invoice uploads continue to work.
+
 ## Technology
 
 - PHP 8.3+
@@ -138,6 +159,22 @@ php artisan migrate:fresh --seed
 
 For MySQL, set `DB_CONNECTION=mysql` and the `DB_HOST`, `DB_PORT`, `DB_DATABASE`, `DB_USERNAME`, and `DB_PASSWORD` values before running migrations.
 
+### Optional AI configuration
+
+AI is disabled by default. To use an OpenAI-compatible endpoint, configure:
+
+```dotenv
+AI_ENABLED=true
+AI_PROVIDER=openai-compatible
+AI_BASE_URL=https://your-provider.example/v1
+AI_MODEL=your-model
+AI_API_KEY=your-secret-key
+AI_TIMEOUT=30
+AI_MAX_RESPONSE_BYTES=1048576
+```
+
+For a compatible local endpoint, use its HTTP base URL and leave `AI_API_KEY` empty when the runtime does not require authentication. HTTPS certificate verification remains enabled for HTTPS endpoints. Vision-capable models are required for image invoice extraction; PDF support depends on the selected compatible endpoint. Automated tests always use the fake provider and require no model or network access.
+
 Start the application and Vite development server:
 
 ```bash
@@ -165,12 +202,12 @@ The seed can be invoked again safely when the complete demo set already exists. 
 
 ## Interview walkthrough
 
-1. Sign in as the Administrator and open **Workflows**. Show the three published versions and the ordered rule groups for Purchase Requests, Supplier Invoices, and Expense Claims.
-2. Sign in as the Employee. Open **Purchase requests** to compare draft, in-approval, changes-requested, resubmitted, withdrawn, and approved histories.
-3. Open **Notifications**, then sign in as the IT manager and process a pending assignment from the **Approval inbox**.
-4. Request changes on an employee record, return as the Employee to edit and resubmit it, and show that its previous actions remain in the timeline.
-5. Sign in as the Finance lead to show Finance-only operational summaries, invoice visibility, decimal quantities, private attachments, and an active Finance step.
-6. Use the seeded high-value records to explain deterministic routing and how the Director step activates only after prior approvals.
+1. Sign in as Finance and upload multiple Supplier Invoices through **Invoice Intake**. The originals stay private while extraction runs independently per document.
+2. Open an extraction result. Show the candidate fields, vendor matches, possible duplicates, and deterministic warnings, then correct the data and explicitly create a Supplier Invoice draft.
+3. Use category assistance if useful. Show that the draft still passes normal validation and remains unsubmitted until Finance chooses to submit it.
+4. Sign in as the Administrator and open **Workflows** to show the published rules that deterministically route all three spend modules.
+5. Sign in as an approver. Review System Checks separately from AI Summary/Observations and open **Why am I approving this?**, which explains the persisted route rather than choosing it.
+6. Draft a request-changes or rejection comment with AI, edit it, and submit the human-selected action. Show preserved approval history, resubmission, withdrawal, and notifications.
 
 For portfolio screenshots, the strongest views are the role-aware dashboard, a populated approval inbox, an approval detail page with attachments and timeline, the workflow-version configuration screen, and side-by-side business records in different lifecycle states. The seed data supplies each state without requiring manual setup.
 
@@ -198,13 +235,11 @@ vendor/bin/pint --dirty --format agent
 php artisan view:cache
 ```
 
-The suite covers authorization and IDOR boundaries, decimal calculations, workflow resolution, rollback behavior, stale/repeated transitions, approval history, private attachments, notifications, operational views, migrations, and demo reproducibility.
+The suite covers authorization and IDOR boundaries, decimal calculations, workflow resolution, rollback behavior, stale/repeated transitions, approval history, private documents, AI schema validation, prompt-injection boundaries, provider failures, queue/idempotency behavior, human verification, duplicate detection, notifications, migrations, and demo reproducibility. Stray HTTP requests are prevented in AI tests.
 
 ## Deliberate V1 boundaries
 
-OpsFlow V1 does not execute payments, reimbursements, purchase orders, budgets, accounting synchronization, delegation, parallel workflows, or AI decisions. Approved records are ready for a downstream business process; they are not paid or reimbursed.
-
-Potential later AI work includes document extraction, receipt extraction, category suggestions, approval summaries, and anomaly hints. Those capabilities remain advisory and outside authoritative totals, routing, and approval decisions.
+OpsFlow does not execute payments, reimbursements, purchase orders, budgets, accounting synchronization, delegation, parallel workflows, receipt/quotation intake, autonomous agents, predictive approval scoring, or AI decisions. Approved records are ready for a downstream business process; they are not paid or reimbursed. AI remains advisory and outside authoritative totals, routing, and approval decisions.
 
 ## License
 

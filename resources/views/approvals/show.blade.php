@@ -94,6 +94,19 @@
             </div></section>
         @endif
 
+        <x-record-analysis
+            :analysis="$aiAnalysis"
+            :system-checks="$systemChecks"
+            :generate-url="route('approvals.ai-analysis', $approvalAssignment)"
+        />
+
+        <x-workflow-explanation
+            :fallback="$workflowFallback"
+            :explanation="$workflowExplanation"
+            :generate-url="route('approval-assignments.workflow-explanation', $approvalAssignment)"
+            :actionable="$actionable"
+        />
+
         <x-approval-timeline :instance="$instance" />
     </main>
 
@@ -112,9 +125,10 @@
             @if ($actionable)
                 <div class="approval-actions" aria-labelledby="approval-actions-heading">
                     <div class="approval-actions-heading"><h2 id="approval-actions-heading">Make a decision</h2><p>Your first committed action is final for this assignment.</p></div>
+                    <x-writing-assistance :suggestion="session('writingAssistance')" />
                     <form class="approval-action approval-action-primary" method="POST" action="{{ route('approval-assignments.approve', $approvalAssignment) }}">@csrf<label class="form-label" for="approve-comment">Approval comment <span class="text-secondary">(optional)</span></label><textarea class="form-control" id="approve-comment" name="comment" rows="2" maxlength="2000"></textarea><button class="btn btn-success w-100" type="submit">Approve</button></form>
-                    <form class="approval-action approval-action-caution" method="POST" action="{{ route('approval-assignments.request-changes', $approvalAssignment) }}">@csrf<label class="form-label" for="changes-comment">Required changes</label><small>Explain what the requester needs to update.</small><textarea class="form-control" id="changes-comment" name="comment" rows="3" maxlength="2000" required></textarea><button class="btn btn-warning w-100" type="submit">Request changes</button></form>
-                    <form class="approval-action approval-action-danger" method="POST" action="{{ route('approval-assignments.reject', $approvalAssignment) }}">@csrf<label class="form-label" for="reject-comment">Rejection reason</label><small>Rejecting ends this approval process.</small><textarea class="form-control" id="reject-comment" name="comment" rows="3" maxlength="2000" required></textarea><button class="btn btn-outline-danger w-100" type="submit">Reject</button></form>
+                    <form class="approval-action approval-action-caution" method="POST" action="{{ route('approval-assignments.request-changes', $approvalAssignment) }}">@csrf<label class="form-label" for="changes-comment">Required changes</label><small>Explain what the requester needs to update.</small><textarea class="form-control" id="changes-comment" name="comment" rows="3" maxlength="2000" required>{{ session('writingAssistance.target') === 'changes-comment' ? old('comment') : '' }}</textarea>@if (config('ai.enabled'))<button class="btn btn-sm btn-link px-0" type="submit" formaction="{{ route('approval-assignments.writing-assistance', [$approvalAssignment, 'request_changes']) }}" formnovalidate>Draft comment with AI</button>@endif<button class="btn btn-warning w-100" type="submit">Request changes</button></form>
+                    <form class="approval-action approval-action-danger" method="POST" action="{{ route('approval-assignments.reject', $approvalAssignment) }}">@csrf<label class="form-label" for="reject-comment">Rejection reason</label><small>Rejecting ends this approval process.</small><textarea class="form-control" id="reject-comment" name="comment" rows="3" maxlength="2000" required>{{ session('writingAssistance.target') === 'reject-comment' ? old('comment') : '' }}</textarea>@if (config('ai.enabled'))<button class="btn btn-sm btn-link px-0" type="submit" formaction="{{ route('approval-assignments.writing-assistance', [$approvalAssignment, 'reject']) }}" formnovalidate>Draft comment with AI</button>@endif<button class="btn btn-outline-danger w-100" type="submit">Reject</button></form>
                 </div>
             @else
                 <div class="approval-unavailable"><strong>No action available</strong><p>This assignment is no longer actionable. Its history remains visible for reference.</p></div>

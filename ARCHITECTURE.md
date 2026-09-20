@@ -1054,21 +1054,23 @@ Dashboards should focus on actions and bottlenecks, not only decorative charts.
 
 ---
 
-# 39. AI Extension Architecture
+# 39. AI Assistance Architecture
 
 AI is an optional enhancement layer.
 
-Potential future components include:
+The implemented provider-independent flow is:
 
 ```text
-DocumentExtractionService
-SpendClassificationService
-ApprovalSummaryService
-AnomalyAnalysisService
-SpendAssistant
+Feature Service
+    ↓
+AiExecutionService + validated structured schema
+    ↓
+AiProvider
+    ↓
+Compatible cloud or local HTTP endpoint
 ```
 
-AI does not become the source of truth for business decisions.
+Implemented features include private batch Supplier Invoice extraction with human verification, vendor and duplicate assistance, category suggestions, record summaries and attention observations, workflow explanations, and editable writing assistance. `AiInteraction` records compact execution traces but is not authoritative business history. Detailed rules live in `docs/architecture/ai-architecture.md`.
 
 ---
 
@@ -1315,6 +1317,10 @@ Audit Trail
 
 Database Notifications
 
+Optional AI Assistance
+Batch Supplier Invoice Intake
+Human Verification
+
 Feature Tests
 ```
 
@@ -1325,8 +1331,6 @@ Feature Tests
 The following are intentionally deferred:
 
 ```text
-AI
-
 Parallel approvals
 
 Advanced ANY / ALL / minimum approvals

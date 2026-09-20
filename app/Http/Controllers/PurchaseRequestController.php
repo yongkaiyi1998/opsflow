@@ -13,6 +13,7 @@ use App\Models\SpendCategory;
 use App\Models\Vendor;
 use App\PurchaseRequestStatus;
 use App\Services\PurchaseRequestService;
+use App\Services\RecordAnalysisService;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Http\RedirectResponse;
@@ -87,7 +88,7 @@ class PurchaseRequestController extends Controller
     /**
      * Display the specified resource.
      */
-    public function show(PurchaseRequest $purchaseRequest): View
+    public function show(PurchaseRequest $purchaseRequest, RecordAnalysisService $analysis): View
     {
         Gate::authorize('view', $purchaseRequest);
         $purchaseRequest->load([
@@ -96,7 +97,11 @@ class PurchaseRequestController extends Controller
             'approvalInstances.steps.assignments.approver', 'approvalInstances.actions.actor', 'approvalInstances.actions.step',
         ]);
 
-        return view('purchase-requests.show', compact('purchaseRequest'));
+        return view('purchase-requests.show', [
+            'purchaseRequest' => $purchaseRequest,
+            'aiAnalysis' => $analysis->latest($purchaseRequest),
+            'systemChecks' => $analysis->systemChecks($purchaseRequest),
+        ]);
     }
 
     /**

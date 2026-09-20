@@ -34,6 +34,12 @@
             <div class="money-summary"><dl><div><dt>Subtotal</dt><dd>{{ App\Support\Money::of($supplierInvoice->subtotal)->format($supplierInvoice->currency) }}</dd></div><div><dt>Tax</dt><dd>{{ App\Support\Money::of($supplierInvoice->tax_amount)->format($supplierInvoice->currency) }}</dd></div><div class="money-summary-total"><dt>Total</dt><dd>{{ App\Support\Money::of($supplierInvoice->total_amount)->format($supplierInvoice->currency) }}</dd></div></dl></div>
         </div></section>
 
+        <x-record-analysis
+            :analysis="$aiAnalysis"
+            :system-checks="$systemChecks"
+            :generate-url="route('supplier-invoices.ai-analysis', $supplierInvoice)"
+        />
+
         <section class="card detail-section"><div class="card-body">
             <div class="detail-section-heading"><div><h2>Invoice documents</h2><p>Private source documents used to verify this invoice.</p></div></div>
             <div class="attachment-list">

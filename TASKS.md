@@ -1673,18 +1673,22 @@ Microservices
 
 ---
 
-# 4. Suggested AI Phase After V1
-
-Only after V1 is stable:
+# 4. AI Phase After V1
 
 ```text
-AI-01 Supplier Invoice Extraction
-AI-02 Expense Receipt Extraction
-AI-03 Category Suggestions
-AI-04 Approval Summary
-AI-05 Duplicate / Anomaly Hints
-AI-06 Finance / Policy Assistant
+AI01 ✅ AI Foundation & Provider Abstraction
+AI02 ✅ AI Persistence, Queue & Structured Output
+AI03 ✅ Batch Document Intake
+AI04 ✅ Document Extraction
+AI05 ✅ Human Verification & Draft Creation
+AI06 ✅ Vendor Matching & Smart Duplicate Detection
+AI07 ✅ Category Suggestion
+AI08 ✅ AI Summary & Attention Flags
+AI09 ✅ Workflow Explanation & Writing Assistance
+AI10 ✅ AI Security, Hardening, Tests & Portfolio Polish
 ```
+
+**AI Phase: Complete ✅**
 
 AI remains advisory.
 

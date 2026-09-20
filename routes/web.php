@@ -7,15 +7,24 @@ use App\Http\Controllers\Auth\NewPasswordController;
 use App\Http\Controllers\Auth\PasswordResetLinkController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\DepartmentController;
+use App\Http\Controllers\DocumentIntakeCategorySuggestionController;
+use App\Http\Controllers\DocumentIntakeExtractionController;
+use App\Http\Controllers\DocumentIntakeOriginalController;
+use App\Http\Controllers\DocumentIntakeResultController;
+use App\Http\Controllers\DocumentIntakeVerificationController;
+use App\Http\Controllers\ExpenseClaimCategorySuggestionController;
 use App\Http\Controllers\ExpenseClaimController;
 use App\Http\Controllers\ExpenseClaimLifecycleController;
 use App\Http\Controllers\ExpenseClaimSubmissionController;
 use App\Http\Controllers\ExpenseItemAttachmentController;
+use App\Http\Controllers\InvoiceIntakeController;
 use App\Http\Controllers\NotificationCenterController;
 use App\Http\Controllers\PurchaseRequestAttachmentController;
+use App\Http\Controllers\PurchaseRequestCategorySuggestionController;
 use App\Http\Controllers\PurchaseRequestController;
 use App\Http\Controllers\PurchaseRequestLifecycleController;
 use App\Http\Controllers\PurchaseRequestSubmissionController;
+use App\Http\Controllers\RecordAnalysisController;
 use App\Http\Controllers\SpendCategoryController;
 use App\Http\Controllers\SupplierInvoiceAttachmentController;
 use App\Http\Controllers\SupplierInvoiceController;
@@ -23,11 +32,13 @@ use App\Http\Controllers\SupplierInvoiceLifecycleController;
 use App\Http\Controllers\SupplierInvoiceSubmissionController;
 use App\Http\Controllers\UserController;
 use App\Http\Controllers\VendorController;
+use App\Http\Controllers\WorkflowExplanationController;
 use App\Http\Controllers\WorkflowRuleController;
 use App\Http\Controllers\WorkflowRuleGroupController;
 use App\Http\Controllers\WorkflowStepController;
 use App\Http\Controllers\WorkflowTemplateController;
 use App\Http\Controllers\WorkflowVersionController;
+use App\Http\Controllers\WritingAssistantController;
 use Illuminate\Support\Facades\Route;
 
 Route::redirect('/', '/dashboard');
@@ -53,20 +64,57 @@ Route::middleware(['auth', 'auth.session', 'active'])->group(function (): void {
     Route::post('/approval-assignments/{approval_assignment}/approve', [ApprovalController::class, 'approve'])->name('approval-assignments.approve');
     Route::post('/approval-assignments/{approval_assignment}/reject', [ApprovalController::class, 'reject'])->name('approval-assignments.reject');
     Route::post('/approval-assignments/{approval_assignment}/request-changes', [ApprovalController::class, 'requestChanges'])->name('approval-assignments.request-changes');
+    Route::post('/approval-assignments/{approval_assignment}/workflow-explanation', WorkflowExplanationController::class)->name('approval-assignments.workflow-explanation');
+    Route::post('/approval-assignments/{approval_assignment}/writing/{writing_action}', [WritingAssistantController::class, 'approvalComment'])
+        ->whereIn('writing_action', ['request_changes', 'reject'])->name('approval-assignments.writing-assistance');
+    Route::post('purchase-requests/writing-assistance', [WritingAssistantController::class, 'purchaseRequest'])->name('purchase-requests.writing-assistance.create');
+    Route::match(['post', 'put'], 'purchase-requests/{purchase_request}/writing-assistance', [WritingAssistantController::class, 'purchaseRequest'])->name('purchase-requests.writing-assistance.update');
+    Route::post('purchase-requests/category-suggestion', [PurchaseRequestCategorySuggestionController::class, 'create'])
+        ->name('purchase-requests.category-suggestion.create');
+    Route::match(['post', 'put'], 'purchase-requests/{purchase_request}/category-suggestion', [PurchaseRequestCategorySuggestionController::class, 'update'])
+        ->name('purchase-requests.category-suggestion.update');
     Route::resource('purchase-requests', PurchaseRequestController::class);
     Route::post('purchase-requests/{purchase_request}/submit', [PurchaseRequestSubmissionController::class, 'store'])->name('purchase-requests.submit');
+    Route::post('purchase-requests/{purchase_request}/ai-analysis', [RecordAnalysisController::class, 'purchaseRequest'])->name('purchase-requests.ai-analysis');
     Route::post('purchase-requests/{purchase_request}/resubmit', [PurchaseRequestLifecycleController::class, 'resubmit'])->name('purchase-requests.resubmit');
     Route::post('purchase-requests/{purchase_request}/withdraw', [PurchaseRequestLifecycleController::class, 'withdraw'])->name('purchase-requests.withdraw');
     Route::post('purchase-requests/{purchase_request}/attachments', [PurchaseRequestAttachmentController::class, 'store'])->name('purchase-request-attachments.store');
     Route::resource('supplier-invoices', SupplierInvoiceController::class);
     Route::post('supplier-invoices/{supplier_invoice}/submit', SupplierInvoiceSubmissionController::class)->name('supplier-invoices.submit');
+    Route::post('supplier-invoices/{supplier_invoice}/ai-analysis', [RecordAnalysisController::class, 'supplierInvoice'])->name('supplier-invoices.ai-analysis');
     Route::post('supplier-invoices/{supplier_invoice}/resubmit', [SupplierInvoiceLifecycleController::class, 'resubmit'])->name('supplier-invoices.resubmit');
     Route::post('supplier-invoices/{supplier_invoice}/withdraw', [SupplierInvoiceLifecycleController::class, 'withdraw'])->name('supplier-invoices.withdraw');
     Route::post('supplier-invoices/{supplier_invoice}/attachments', [SupplierInvoiceAttachmentController::class, 'store'])->name('supplier-invoice-attachments.store');
+    Route::resource('invoice-intakes', InvoiceIntakeController::class)
+        ->parameters(['invoice-intakes' => 'intake_batch'])
+        ->only(['index', 'create', 'store', 'show']);
+    Route::get('invoice-intakes/{intake_batch}/documents/{document_intake}/original', DocumentIntakeOriginalController::class)
+        ->scopeBindings()
+        ->name('invoice-intakes.documents.original');
+    Route::get('invoice-intakes/{intake_batch}/documents/{document_intake}', DocumentIntakeResultController::class)
+        ->scopeBindings()
+        ->name('invoice-intakes.documents.show');
+    Route::post('invoice-intakes/{intake_batch}/documents/{document_intake}/extract', DocumentIntakeExtractionController::class)
+        ->scopeBindings()
+        ->name('invoice-intakes.documents.extract');
+    Route::post('invoice-intakes/{intake_batch}/documents/{document_intake}/category-suggestion', DocumentIntakeCategorySuggestionController::class)
+        ->scopeBindings()
+        ->name('invoice-intakes.documents.category-suggestion');
+    Route::post('invoice-intakes/{intake_batch}/documents/{document_intake}/verify', DocumentIntakeVerificationController::class)
+        ->scopeBindings()
+        ->name('invoice-intakes.documents.verify');
+    Route::post('expense-claims/category-suggestion', [ExpenseClaimCategorySuggestionController::class, 'create'])
+        ->name('expense-claims.category-suggestion.create');
+    Route::match(['post', 'put'], 'expense-claims/{expense_claim}/category-suggestion', [ExpenseClaimCategorySuggestionController::class, 'update'])
+        ->name('expense-claims.category-suggestion.update');
+    Route::post('expense-claims/writing-assistance', [WritingAssistantController::class, 'expenseClaim'])->name('expense-claims.writing-assistance.create');
+    Route::match(['post', 'put'], 'expense-claims/{expense_claim}/writing-assistance', [WritingAssistantController::class, 'expenseClaim'])->name('expense-claims.writing-assistance.update');
     Route::resource('expense-claims', ExpenseClaimController::class);
     Route::post('expense-claims/{expense_claim}/submit', ExpenseClaimSubmissionController::class)->name('expense-claims.submit');
+    Route::post('expense-claims/{expense_claim}/ai-analysis', [RecordAnalysisController::class, 'expenseClaim'])->name('expense-claims.ai-analysis');
     Route::post('expense-claims/{expense_claim}/resubmit', [ExpenseClaimLifecycleController::class, 'resubmit'])->name('expense-claims.resubmit');
     Route::post('expense-claims/{expense_claim}/withdraw', [ExpenseClaimLifecycleController::class, 'withdraw'])->name('expense-claims.withdraw');
+    Route::post('approvals/{approval_assignment}/ai-analysis', [RecordAnalysisController::class, 'approval'])->name('approvals.ai-analysis');
     Route::post('expense-items/{expense_item}/attachments', [ExpenseItemAttachmentController::class, 'store'])->name('expense-item-attachments.store');
     Route::resource('departments', DepartmentController::class)->except(['show', 'destroy']);
     Route::resource('spend-categories', SpendCategoryController::class)->except(['show', 'destroy']);

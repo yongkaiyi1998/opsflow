@@ -53,6 +53,12 @@
             </div>
         </div></section>
 
+        <x-record-analysis
+            :analysis="$aiAnalysis"
+            :system-checks="$systemChecks"
+            :generate-url="route('expense-claims.ai-analysis', $expenseClaim)"
+        />
+
         @foreach ($expenseClaim->approvalInstances as $approvalInstance)<x-approval-timeline :instance="$approvalInstance" />@endforeach
     </main>
 

@@ -11,6 +11,8 @@ use App\Models\ExpenseClaim;
 use App\Models\PurchaseRequest;
 use App\Models\SupplierInvoice;
 use App\Services\ApprovalService;
+use App\Services\RecordAnalysisService;
+use App\Services\WorkflowExplanationService;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\MorphTo;
 use Illuminate\Http\RedirectResponse;
@@ -49,7 +51,7 @@ class ApprovalController extends Controller
         return view('approvals.index', compact('assignments'));
     }
 
-    public function show(ApprovalAssignment $approvalAssignment): View
+    public function show(ApprovalAssignment $approvalAssignment, RecordAnalysisService $analysis, WorkflowExplanationService $workflowExplanations): View
     {
         Gate::authorize('view', $approvalAssignment);
         $approvalAssignment->load([
@@ -77,7 +79,16 @@ class ApprovalController extends Controller
             && $instance->current_step_order === $approvalAssignment->step->step_order
             && (string) $business->getRawOriginal('status') === 'IN_APPROVAL';
 
-        return view('approvals.show', compact('approvalAssignment', 'instance', 'business', 'actionable'));
+        return view('approvals.show', [
+            'approvalAssignment' => $approvalAssignment,
+            'instance' => $instance,
+            'business' => $business,
+            'actionable' => $actionable,
+            'aiAnalysis' => $analysis->latest($business),
+            'systemChecks' => $analysis->systemChecks($business),
+            'workflowExplanation' => $workflowExplanations->latest($approvalAssignment),
+            'workflowFallback' => $workflowExplanations->fallback($approvalAssignment),
+        ]);
     }
 
     public function approve(
@@ -118,6 +129,7 @@ class ApprovalController extends Controller
             ]),
             $business instanceof SupplierInvoice => $business->load([
                 'submittedBy', 'department', 'category', 'vendor', 'items', 'attachments.uploadedBy',
+                'attachments.sourceDocumentIntake',
             ]),
             $business instanceof ExpenseClaim => $business->load([
                 'employee', 'department', 'items.category', 'items.attachments.uploadedBy',

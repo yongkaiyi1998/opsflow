@@ -718,6 +718,13 @@ a { text-underline-offset: .16em; }
 .workflow-reference-body { border-top: 1px solid var(--opsflow-border); padding: .8rem 1rem; }
 .workflow-reference-body p { font-size: .72rem; margin: .3rem 0; overflow-wrap: anywhere; }
 
+.intake-overview-card .card-body { display: grid; gap: 1.25rem; grid-template-columns: repeat(5, minmax(0, 1fr)); padding: 1.25rem; }
+.intake-overview-card strong { color: #344054; display: block; font-size: .85rem; margin-top: .25rem; }
+.intake-progress-grid { display: grid; gap: .75rem; grid-template-columns: repeat(6, minmax(0, 1fr)); }
+.intake-progress-grid .card-body { padding: .9rem 1rem; }
+.intake-progress-grid span { color: var(--opsflow-muted); display: block; font-size: .66rem; font-weight: 700; text-transform: uppercase; }
+.intake-progress-grid strong { color: #243d70; display: block; font-size: 1.3rem; margin-top: .2rem; }
+
 @media (min-width: 992px) {
     .app-content { margin-left: var(--opsflow-sidebar-width); }
     .app-main { padding: 2.25rem 2rem 4rem; }
@@ -775,4 +782,6 @@ a { text-underline-offset: .16em; }
     .workflow-route-approver { text-align: left; }
     .workflow-row-actions { justify-content: flex-start; }
     .workflow-version-summary { grid-template-columns: 1fr 1fr; }
+    .intake-overview-card .card-body { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .intake-progress-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }

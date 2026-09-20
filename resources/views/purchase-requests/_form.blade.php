@@ -1,6 +1,12 @@
 @php
     $savedItems = $purchaseRequest?->items?->map(fn ($item) => ['description' => $item->description, 'quantity' => $item->quantity, 'unit_price' => $item->unit_price])->all();
     $items = old('items', $savedItems ?: [['description' => '', 'quantity' => 1, 'unit_price' => '']]);
+    $categorySuggestionUrl = $purchaseRequest
+        ? route('purchase-requests.category-suggestion.update', $purchaseRequest)
+        : route('purchase-requests.category-suggestion.create');
+    $writingAssistanceUrl = $purchaseRequest
+        ? route('purchase-requests.writing-assistance.update', $purchaseRequest)
+        : route('purchase-requests.writing-assistance.create');
 @endphp
 @if ($purchaseRequest)<input type="hidden" name="lock_version" value="{{ $purchaseRequest->lock_version }}">@endif
 <section class="form-section">
@@ -8,11 +14,12 @@
 <div class="row g-3">
     <div class="col-md-8"><label class="form-label" for="title">Title</label><input class="form-control @error('title') is-invalid @enderror" id="title" name="title" value="{{ old('title', $purchaseRequest?->title) }}" maxlength="255" required></div>
     <div class="col-md-4"><label class="form-label">Department</label><input class="form-control" value="{{ auth()->user()->department?->name ?? 'No department assigned' }}" disabled><div class="form-text">Derived from your user profile.</div></div>
-    <div class="col-12"><label class="form-label" for="description">Business justification</label><textarea class="form-control @error('description') is-invalid @enderror" id="description" name="description" rows="4" maxlength="10000" required>{{ old('description', $purchaseRequest?->description) }}</textarea></div>
-    <div class="col-md-4"><label class="form-label" for="category_id">Spend category</label><select class="form-select @error('category_id') is-invalid @enderror" id="category_id" name="category_id" required><option value="">Select category</option>@foreach ($categories as $category)<option value="{{ $category->id }}" @selected((string) old('category_id', $purchaseRequest?->category_id) === (string) $category->id)>{{ $category->name }}</option>@endforeach</select></div>
+    <div class="col-12"><div class="d-flex justify-content-between align-items-center gap-2"><label class="form-label" for="description">Business justification</label>@if (config('ai.enabled'))<button class="btn btn-sm btn-link" type="submit" formaction="{{ $writingAssistanceUrl }}" formnovalidate>Improve with AI</button>@endif</div><textarea class="form-control @error('description') is-invalid @enderror" id="description" name="description" rows="4" maxlength="10000" required>{{ old('description', $purchaseRequest?->description) }}</textarea><x-writing-assistance :suggestion="session('writingAssistance')" /></div>
+    <div class="col-md-4"><label class="form-label" for="category_id">Spend category</label><select class="form-select @error('category_id') is-invalid @enderror" id="category_id" name="category_id" required><option value="">Select category</option>@foreach ($categories as $category)<option value="{{ $category->id }}" @selected((string) old('category_id', $purchaseRequest?->category_id) === (string) $category->id)>{{ $category->name }}</option>@endforeach</select>@if (config('ai.enabled'))<button class="btn btn-sm btn-link px-0 mt-1" type="submit" formaction="{{ $categorySuggestionUrl }}" formnovalidate>Suggest category</button>@endif</div>
     <div class="col-md-4"><label class="form-label" for="vendor_id">Vendor</label><select class="form-select @error('vendor_id') is-invalid @enderror" id="vendor_id" name="vendor_id"><option value="">Not selected</option>@foreach ($vendors as $vendor)<option value="{{ $vendor->id }}" @selected((string) old('vendor_id', $purchaseRequest?->vendor_id) === (string) $vendor->id)>{{ $vendor->name }}</option>@endforeach</select></div>
     <div class="col-md-4"><label class="form-label" for="needed_by_date">Needed by</label><input class="form-control @error('needed_by_date') is-invalid @enderror" id="needed_by_date" name="needed_by_date" type="date" min="{{ today()->toDateString() }}" value="{{ old('needed_by_date', $purchaseRequest?->needed_by_date?->toDateString()) }}"></div>
 </div>
+<x-category-suggestion :suggestion="session('categorySuggestion')" />
 </section>
 
 <section class="form-section">

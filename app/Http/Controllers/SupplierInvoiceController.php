@@ -9,6 +9,7 @@ use App\Models\Department;
 use App\Models\SpendCategory;
 use App\Models\SupplierInvoice;
 use App\Models\Vendor;
+use App\Services\RecordAnalysisService;
 use App\Services\SupplierInvoiceService;
 use App\SupplierInvoiceStatus;
 use Illuminate\Database\Eloquent\Builder;
@@ -85,16 +86,21 @@ class SupplierInvoiceController extends Controller
     /**
      * Display the specified resource.
      */
-    public function show(SupplierInvoice $supplierInvoice): View
+    public function show(SupplierInvoice $supplierInvoice, RecordAnalysisService $analysis): View
     {
         Gate::authorize('view', $supplierInvoice);
         $supplierInvoice->load([
             'vendor', 'department', 'category', 'submittedBy', 'items', 'attachments.uploadedBy',
+            'attachments.sourceDocumentIntake',
             'approvalInstances.workflowVersion', 'approvalInstances.workflowRuleGroup',
             'approvalInstances.steps.assignments.approver', 'approvalInstances.actions.actor', 'approvalInstances.actions.step',
         ]);
 
-        return view('supplier-invoices.show', compact('supplierInvoice'));
+        return view('supplier-invoices.show', [
+            'supplierInvoice' => $supplierInvoice,
+            'aiAnalysis' => $analysis->latest($supplierInvoice),
+            'systemChecks' => $analysis->systemChecks($supplierInvoice),
+        ]);
     }
 
     /**
