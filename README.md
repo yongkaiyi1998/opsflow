@@ -117,7 +117,14 @@ Private batch upload → queued extraction → candidate data → human verifica
 → SupplierInvoice DRAFT → normal deterministic submission and approval
 ```
 
-Expense Receipt intake reuses the same private batch, queue, interaction, and extraction lifecycle. RI01 stops at read-only `NEEDS_VERIFICATION` candidate data; creating an Expense Claim draft remains a separate human-verification step.
+Expense Receipt intake reuses the same private batch, queue, interaction, and extraction lifecycle:
+
+```text
+Private receipt batch → queued AI extraction → candidate data → human verification
+→ one Expense Claim DRAFT with one item per receipt
+```
+
+AI values remain untrusted candidates, each category is confirmed by the employee, and deterministic Expense Claim rules calculate the authoritative gross total and preserve each original as a private item attachment.
 
 AI extracts, summarizes, suggests, explains, and flags. Deterministic services validate totals and route workflows. Humans verify data and submit approval decisions. Setting `AI_ENABLED=false` removes AI actions while manual records, workflows, approvals, and private invoice uploads continue to work.
 
@@ -241,7 +248,7 @@ The suite covers authorization and IDOR boundaries, decimal calculations, workfl
 
 ## Deliberate V1 boundaries
 
-OpsFlow does not execute payments, reimbursements, purchase orders, budgets, accounting synchronization, delegation, parallel workflows, quotation intake, autonomous agents, predictive approval scoring, or AI decisions. Receipt intake produces candidate data only and does not yet create an Expense Claim draft. Approved records are ready for a downstream business process; they are not paid or reimbursed. AI remains advisory and outside authoritative totals, routing, and approval decisions.
+OpsFlow does not execute payments, reimbursements, purchase orders, budgets, accounting synchronization, delegation, parallel workflows, quotation intake, autonomous agents, predictive approval scoring, or AI decisions. Receipt intake creates an unsubmitted Expense Claim draft only after human verification. Approved records are ready for a downstream business process; they are not paid or reimbursed. AI remains advisory and outside authoritative totals, routing, and approval decisions.
 
 ## License
 

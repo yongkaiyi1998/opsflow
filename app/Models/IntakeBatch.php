@@ -8,7 +8,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
-#[Fillable(['uploaded_by', 'submission_key'])]
+#[Fillable(['uploaded_by', 'submission_key', 'expense_claim_id'])]
 class IntakeBatch extends Model
 {
     public function uploadedBy(): BelongsTo
@@ -19,6 +19,11 @@ class IntakeBatch extends Model
     public function documentIntakes(): HasMany
     {
         return $this->hasMany(DocumentIntake::class)->orderBy('id');
+    }
+
+    public function expenseClaim(): BelongsTo
+    {
+        return $this->belongsTo(ExpenseClaim::class);
     }
 
     /** @return array<string, int> */

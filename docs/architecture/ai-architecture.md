@@ -112,7 +112,7 @@ Upload N documents
 → SupplierInvoice DRAFT  
 → Normal OpsFlow workflow
 
-Expense Receipt RI01 stops at `NEEDS_VERIFICATION`; it does not create an Expense Claim or item. One receipt batch is reserved to become one claim, with each verified receipt becoming one item in the later verification phase.
+Expense Receipt intake continues from `NEEDS_VERIFICATION` through explicit human verification. One receipt batch becomes one Expense Claim draft, each receipt becomes one claim item with its original private attachment, and the human confirms every category. Extracted values remain untrusted candidate data; deterministic Expense Claim rules remain authoritative.
 
 One failed document must not fail the whole batch.
 

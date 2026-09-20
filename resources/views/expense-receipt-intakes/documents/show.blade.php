@@ -7,9 +7,12 @@
     <a href="{{ route('expense-receipt-intakes.show', $intakeBatch) }}">Batch #{{ str_pad((string) $intakeBatch->id, 6, '0', STR_PAD_LEFT) }}</a><span>/</span>
     <span>{{ $documentIntake->original_name }}</span>
 </div>
-<x-page-header :title="$documentIntake->original_name" description="Review the extracted receipt candidate against the private original. Verification and claim creation are added in RI02.">
+<x-page-header :title="$documentIntake->original_name" description="Review the extracted receipt candidate against the private original before verifying the complete batch.">
     <x-slot:actions>
         <a class="btn btn-outline-secondary" href="{{ route('expense-receipt-intakes.documents.original', [$intakeBatch, $documentIntake]) }}">Open original</a>
+        @if ($documentIntake->status === App\DocumentIntakeStatus::NeedsVerification)
+            <a class="btn btn-primary" href="{{ route('expense-receipt-intakes.verification.create', $intakeBatch) }}">Verify batch</a>
+        @endif
         @if (config('ai.enabled') && in_array($documentIntake->status, [App\DocumentIntakeStatus::Pending, App\DocumentIntakeStatus::Processing, App\DocumentIntakeStatus::Failed], true))
             <form method="POST" action="{{ route('expense-receipt-intakes.documents.extract', [$intakeBatch, $documentIntake]) }}">
                 @csrf

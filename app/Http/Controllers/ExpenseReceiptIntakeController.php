@@ -65,7 +65,7 @@ class ExpenseReceiptIntakeController extends Controller
     public function show(IntakeBatch $intakeBatch): View
     {
         Gate::authorize('view', $intakeBatch);
-        $intakeBatch->load(['uploadedBy', 'documentIntakes']);
+        $intakeBatch->load(['uploadedBy', 'documentIntakes', 'expenseClaim']);
         abort_unless($intakeBatch->documentIntakes->isNotEmpty()
             && $intakeBatch->documentIntakes->every(
                 fn ($document): bool => $document->document_type === IntakeDocumentType::ExpenseReceipt,

@@ -17,6 +17,7 @@ use App\Http\Controllers\ExpenseClaimController;
 use App\Http\Controllers\ExpenseClaimLifecycleController;
 use App\Http\Controllers\ExpenseClaimSubmissionController;
 use App\Http\Controllers\ExpenseItemAttachmentController;
+use App\Http\Controllers\ExpenseReceiptBatchVerificationController;
 use App\Http\Controllers\ExpenseReceiptIntakeController;
 use App\Http\Controllers\ExpenseReceiptIntakeResultController;
 use App\Http\Controllers\InvoiceIntakeController;
@@ -108,6 +109,10 @@ Route::middleware(['auth', 'auth.session', 'active'])->group(function (): void {
     Route::resource('expense-receipt-intakes', ExpenseReceiptIntakeController::class)
         ->parameters(['expense-receipt-intakes' => 'intake_batch'])
         ->only(['index', 'create', 'store', 'show']);
+    Route::get('expense-receipt-intakes/{intake_batch}/verify', [ExpenseReceiptBatchVerificationController::class, 'create'])
+        ->name('expense-receipt-intakes.verification.create');
+    Route::post('expense-receipt-intakes/{intake_batch}/verify', [ExpenseReceiptBatchVerificationController::class, 'store'])
+        ->name('expense-receipt-intakes.verification.store');
     Route::get('expense-receipt-intakes/{intake_batch}/documents/{document_intake}/original', DocumentIntakeOriginalController::class)
         ->scopeBindings()
         ->name('expense-receipt-intakes.documents.original');

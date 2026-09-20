@@ -25,4 +25,9 @@ class Attachment extends Model
     {
         return $this->hasOne(DocumentIntake::class, 'supplier_invoice_attachment_id');
     }
+
+    public function sourceExpenseReceiptIntake(): HasOne
+    {
+        return $this->hasOne(DocumentIntake::class, 'expense_item_attachment_id');
+    }
 }

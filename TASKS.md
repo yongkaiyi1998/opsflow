@@ -1698,9 +1698,11 @@ Deterministic business rules and humans remain authoritative.
 
 ```text
 RI01 ✅ Expense Receipt Intake & Extraction
-RI02 ← Next: Human Verification → Expense Claim Draft
-RI03 Receipt Hardening, Tests & Demo Polish
+RI02 ✅ Human Verification → Expense Claim Draft
+RI03 ✅ Receipt Hardening, Tests & Demo Polish
 ```
+
+**Expense Receipt Intake phase: Complete ✅**
 
 ---
 

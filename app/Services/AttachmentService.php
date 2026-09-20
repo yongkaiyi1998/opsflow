@@ -90,10 +90,19 @@ class AttachmentService
 
             $lockedAttachment->setRelation('attachable', $lockedAttachable);
             Gate::forUser($lockedUser)->authorize('delete', $lockedAttachment);
+            $preserveIntakeSource = $lockedAttachment->sourceExpenseReceiptIntake()->exists();
             $lockedAttachment->delete();
 
-            return ['disk' => $lockedAttachment->disk, 'path' => $lockedAttachment->path];
+            return [
+                'disk' => $lockedAttachment->disk,
+                'path' => $lockedAttachment->path,
+                'preserve_intake_source' => $preserveIntakeSource,
+            ];
         }, 5);
+
+        if ($storedFile['preserve_intake_source']) {
+            return;
+        }
 
         $disk = Storage::disk($storedFile['disk']);
 

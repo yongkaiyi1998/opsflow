@@ -13,7 +13,8 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
     'document_type', 'status', 'ai_interaction_id', 'extraction_payload',
     'extraction_warnings', 'extraction_prompt_version', 'extraction_schema_version',
     'processing_started_at', 'extracted_at', 'failure_reason', 'supplier_invoice_id',
-    'supplier_invoice_attachment_id', 'verified_by', 'verified_at',
+    'supplier_invoice_attachment_id', 'expense_item_id', 'expense_item_attachment_id',
+    'verified_by', 'verified_at',
 ])]
 class DocumentIntake extends Model
 {
@@ -40,6 +41,16 @@ class DocumentIntake extends Model
     public function supplierInvoiceAttachment(): BelongsTo
     {
         return $this->belongsTo(Attachment::class, 'supplier_invoice_attachment_id');
+    }
+
+    public function expenseItem(): BelongsTo
+    {
+        return $this->belongsTo(ExpenseItem::class);
+    }
+
+    public function expenseItemAttachment(): BelongsTo
+    {
+        return $this->belongsTo(Attachment::class, 'expense_item_attachment_id');
     }
 
     public function verifiedBy(): BelongsTo

@@ -2,12 +2,17 @@
 
 namespace App\Services;
 
+use App\DocumentIntakeStatus;
 use App\Exceptions\ApprovalRuntimeException;
 use App\Exceptions\WorkflowResolutionException;
 use App\ExpenseClaimStatus;
+use App\IntakeDocumentType;
 use App\MasterDataStatus;
+use App\Models\Attachment;
+use App\Models\DocumentIntake;
 use App\Models\ExpenseClaim;
 use App\Models\ExpenseItem;
+use App\Models\IntakeBatch;
 use App\Models\User;
 use App\ReferenceType;
 use App\Support\Money;
@@ -18,8 +23,10 @@ use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 use InvalidArgumentException;
+use LogicException;
 use OverflowException;
 
 class ExpenseClaimService
@@ -40,24 +47,100 @@ class ExpenseClaimService
         return DB::transaction(function () use ($attributes, $user): ExpenseClaim {
             $employee = User::query()->whereKey($user->id)->lockForUpdate()->firstOrFail();
             Gate::forUser($employee)->authorize('create', ExpenseClaim::class);
-            $departmentId = $this->validateEmployeeDepartment($employee, true);
-            [$items, $total] = $this->normalizeItems($attributes['items'] ?? []);
-            $this->validateCategories($items);
 
-            $claim = ExpenseClaim::forceCreate([
-                'claim_no' => $this->referenceNumbers->next(ReferenceType::ExpenseClaim),
-                'employee_id' => $employee->id,
-                'department_id' => $departmentId,
-                'title' => trim((string) ($attributes['title'] ?? '')),
-                'description' => trim((string) ($attributes['description'] ?? '')),
-                'currency' => 'MYR',
-                'total_amount' => $total->decimal(),
-                'status' => ExpenseClaimStatus::Draft,
-                'lock_version' => 1,
-            ]);
-            $claim->items()->createMany($items);
+            return $this->createDraft($attributes, $employee);
+        }, 5);
+    }
 
-            return $claim->load(['employee', 'department', 'items.category']);
+    /** @param array<string, mixed> $attributes */
+    public function createFromReceiptBatch(IntakeBatch $batch, array $attributes, User $actor): ExpenseClaim
+    {
+        Gate::forUser($actor)->authorize('view', $batch);
+        Gate::forUser($actor)->authorize('create', ExpenseClaim::class);
+
+        if ($batch->expense_claim_id === null) {
+            foreach ($batch->documentIntakes()->get() as $document) {
+                $this->validatePrivateReceiptSource($document);
+            }
+        }
+
+        return DB::transaction(function () use ($batch, $attributes, $actor): ExpenseClaim {
+            $lockedBatch = IntakeBatch::query()->whereKey($batch->id)->lockForUpdate()->firstOrFail();
+            $documents = DocumentIntake::query()
+                ->where('intake_batch_id', $lockedBatch->id)
+                ->orderBy('id')
+                ->lockForUpdate()
+                ->get();
+            $employee = User::query()->whereKey($actor->id)->lockForUpdate()->firstOrFail();
+
+            if (! $employee->isActive()) {
+                throw new AuthorizationException;
+            }
+
+            $lockedBatch->setRelation('documentIntakes', $documents);
+            Gate::forUser($employee)->authorize('view', $lockedBatch);
+            Gate::forUser($employee)->authorize('create', ExpenseClaim::class);
+
+            if ($lockedBatch->expense_claim_id !== null) {
+                return ExpenseClaim::query()->findOrFail($lockedBatch->expense_claim_id)
+                    ->load(['employee', 'department', 'items.category', 'items.attachments']);
+            }
+
+            if ($documents->isEmpty()
+                || $documents->contains(fn (DocumentIntake $document): bool => $document->document_type !== IntakeDocumentType::ExpenseReceipt)
+                || $documents->contains(fn (DocumentIntake $document): bool => $document->status !== DocumentIntakeStatus::NeedsVerification
+                    || $document->expense_item_id !== null
+                    || $document->expense_item_attachment_id !== null)) {
+                throw ValidationException::withMessages([
+                    'verification' => 'Every receipt must be ready for verification before creating the expense claim.',
+                ]);
+            }
+
+            $submittedReceipts = collect($attributes['receipts'] ?? []);
+            $submittedIds = $submittedReceipts->keys()->map(fn (mixed $id): int => (int) $id)->sort()->values();
+            $documentIds = $documents->pluck('id')->map(fn (mixed $id): int => (int) $id)->sort()->values();
+
+            if ($submittedIds->all() !== $documentIds->all()) {
+                throw ValidationException::withMessages([
+                    'receipts' => 'The submitted receipts do not match this batch. Reload and try again.',
+                ]);
+            }
+
+            foreach ($documents as $document) {
+                $this->validatePrivateReceiptMetadata($document);
+            }
+
+            $claimAttributes = [
+                'title' => $attributes['title'] ?? '',
+                'description' => $attributes['description'] ?? '',
+                'items' => $documents->map(fn (DocumentIntake $document): array => $submittedReceipts->get((string) $document->id)
+                    ?? $submittedReceipts->get($document->id))->all(),
+            ];
+            $claim = $this->createDraft($claimAttributes, $employee);
+
+            foreach ($documents as $index => $document) {
+                $item = $claim->items[$index];
+                $attachment = $this->createReceiptAttachment($document, $item, $employee);
+                $document->forceFill([
+                    'status' => DocumentIntakeStatus::Verified,
+                    'expense_item_id' => $item->id,
+                    'expense_item_attachment_id' => $attachment->id,
+                    'verified_by' => $employee->id,
+                    'verified_at' => now(),
+                    'processing_started_at' => null,
+                    'failure_reason' => null,
+                ])->save();
+            }
+
+            $lockedBatch->forceFill(['expense_claim_id' => $claim->id])->save();
+            $this->auditService->logCreated($claim, $employee, [
+                'claim_no' => $claim->claim_no,
+                'department_id' => $claim->department_id,
+                'total_amount' => $claim->total_amount,
+                'status' => $claim->status,
+            ], metadata: ['intake_batch_id' => $lockedBatch->id]);
+
+            return $claim->load(['employee', 'department', 'items.category', 'items.attachments']);
         }, 5);
     }
 
@@ -284,6 +367,68 @@ class ExpenseClaimService
         $this->deleteFiles($files);
     }
 
+    /** @param array<string, mixed> $attributes */
+    private function createDraft(array $attributes, User $employee): ExpenseClaim
+    {
+        $departmentId = $this->validateEmployeeDepartment($employee, true);
+        [$items, $total] = $this->normalizeItems($attributes['items'] ?? []);
+        $this->validateCategories($items, true);
+
+        $claim = ExpenseClaim::forceCreate([
+            'claim_no' => $this->referenceNumbers->next(ReferenceType::ExpenseClaim),
+            'employee_id' => $employee->id,
+            'department_id' => $departmentId,
+            'title' => trim((string) ($attributes['title'] ?? '')),
+            'description' => trim((string) ($attributes['description'] ?? '')),
+            'currency' => 'MYR',
+            'total_amount' => $total->decimal(),
+            'status' => ExpenseClaimStatus::Draft,
+            'lock_version' => 1,
+        ]);
+        $claim->items()->createMany($items);
+
+        return $claim->load(['employee', 'department', 'items.category']);
+    }
+
+    private function createReceiptAttachment(DocumentIntake $document, ExpenseItem $item, User $employee): Attachment
+    {
+        $attachment = new Attachment([
+            'original_name' => basename($document->original_name),
+            'stored_name' => basename($document->path),
+            'disk' => $document->disk,
+            'path' => $document->path,
+            'mime_type' => $document->mime_type,
+            'size' => $document->size,
+            'uploaded_by' => $employee->id,
+        ]);
+        $attachment->attachable()->associate($item);
+        $attachment->save();
+
+        return $attachment;
+    }
+
+    private function validatePrivateReceiptSource(DocumentIntake $document): void
+    {
+        $this->validatePrivateReceiptMetadata($document);
+
+        if (! Storage::disk($document->disk)->exists($document->path)) {
+            throw ValidationException::withMessages([
+                'verification' => 'An original receipt is unavailable. Restore it before verification.',
+            ]);
+        }
+    }
+
+    private function validatePrivateReceiptMetadata(DocumentIntake $document): void
+    {
+        if ($document->disk === ''
+            || $document->disk === 'public'
+            || config("filesystems.disks.{$document->disk}.visibility") === 'public'
+            || ! Str::startsWith($document->path, 'document-intakes/')
+            || Str::contains($document->path, ['../', '..\\'])) {
+            throw new LogicException('Receipt intake sources must remain on private document storage.');
+        }
+    }
+
     private function validateEmployeeDepartment(User $employee, bool $lock = false): int
     {
         $departmentId = (int) $employee->department_id;
@@ -433,7 +578,13 @@ class ExpenseClaimService
 
     private function attachmentFiles(Collection $attachments): Collection
     {
-        return $attachments->map(fn ($attachment): array => ['disk' => $attachment->disk, 'path' => $attachment->path]);
+        $intakeSourceAttachmentIds = DocumentIntake::query()
+            ->whereIn('expense_item_attachment_id', $attachments->pluck('id'))
+            ->pluck('expense_item_attachment_id');
+
+        return $attachments
+            ->whereNotIn('id', $intakeSourceAttachmentIds)
+            ->map(fn ($attachment): array => ['disk' => $attachment->disk, 'path' => $attachment->path]);
     }
 
     /** @param iterable<array{disk: string, path: string}> $files */
