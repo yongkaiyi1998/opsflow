@@ -3,6 +3,9 @@
         <span class="app-nav-label">Main</span>
         <a class="app-nav-link {{ request()->routeIs('dashboard') ? 'active' : '' }}" href="{{ route('dashboard') }}" @if (request()->routeIs('dashboard')) aria-current="page" @endif>Dashboard</a>
         <a class="app-nav-link {{ request()->routeIs('purchase-requests.*') || request()->routeIs('purchase-request-attachments.*') ? 'active' : '' }}" href="{{ route('purchase-requests.index') }}" @if (request()->routeIs('purchase-requests.*') || request()->routeIs('purchase-request-attachments.*')) aria-current="page" @endif>Purchase Requests</a>
+        @can('create', App\Models\PurchaseRequest::class)
+            <a class="app-nav-link {{ request()->routeIs('purchase-quotation-intakes.*') ? 'active' : '' }}" href="{{ route('purchase-quotation-intakes.index') }}" @if (request()->routeIs('purchase-quotation-intakes.*')) aria-current="page" @endif>Quotation Intake</a>
+        @endcan
         @can('viewAny', App\Models\SupplierInvoice::class)
             <a class="app-nav-link {{ request()->routeIs('supplier-invoices.*') || request()->routeIs('supplier-invoice-attachments.*') ? 'active' : '' }}" href="{{ route('supplier-invoices.index') }}" @if (request()->routeIs('supplier-invoices.*') || request()->routeIs('supplier-invoice-attachments.*')) aria-current="page" @endif>Supplier Invoices</a>
         @endcan

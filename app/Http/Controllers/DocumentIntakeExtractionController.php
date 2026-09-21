@@ -20,9 +20,11 @@ class DocumentIntakeExtractionController extends Controller
         Gate::authorize('view', $intakeBatch);
         Gate::authorize('process', $documentIntake);
         abort_unless($documentIntake->intakeBatch()->whereKey($intakeBatch->getKey())->exists(), 404);
-        $expectedType = request()->routeIs('expense-receipt-intakes.*')
-            ? IntakeDocumentType::ExpenseReceipt
-            : IntakeDocumentType::SupplierInvoice;
+        $expectedType = match (true) {
+            request()->routeIs('expense-receipt-intakes.*') => IntakeDocumentType::ExpenseReceipt,
+            request()->routeIs('purchase-quotation-intakes.*') => IntakeDocumentType::PurchaseQuotation,
+            default => IntakeDocumentType::SupplierInvoice,
+        };
         abort_unless($documentIntake->document_type === $expectedType, 404);
 
         if (! config('ai.enabled')) {

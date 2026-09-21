@@ -101,7 +101,7 @@ Avoid storing unnecessary secrets or full sensitive documents.
 
 ## Batch Document Intake
 
-Invoice and receipt intake use the same generic private-document lifecycle while remaining separate from authoritative `SupplierInvoice` and `ExpenseClaim` records.
+Invoice, receipt, and purchase-quotation intake use the same generic private-document lifecycle while remaining separate from authoritative business records.
 
 Upload N documents  
 → IntakeBatch  
@@ -113,6 +113,8 @@ Upload N documents
 → Normal OpsFlow workflow
 
 Expense Receipt intake continues from `NEEDS_VERIFICATION` through explicit human verification. One receipt batch becomes one Expense Claim draft, each receipt becomes one claim item with its original private attachment, and the human confirms every category. Extracted values remain untrusted candidate data; deterministic Expense Claim rules remain authoritative.
+
+Purchase Quotation intake verifies one selected quotation into one Purchase Request draft. Vendor and category remain human-confirmed, Purchase Request Money and integer-quantity rules remain authoritative, the original quotation becomes a private PR attachment, and the draft is not automatically submitted. Quotation comparison and RFQ workflows are outside this scope.
 
 One failed document must not fail the whole batch.
 
@@ -130,7 +132,7 @@ AI processing must not add AI-specific states to the Supplier Invoice business l
 
 ## Document Extraction
 
-Supported document types are Supplier Invoice and Expense Receipt.
+Supported document types are Supplier Invoice, Expense Receipt, and Purchase Quotation.
 
 Candidate fields may include:
 - vendor
@@ -163,7 +165,7 @@ AI candidate data
 → human review/edit  
 → server validation  
 → authoritative money recalculation  
-→ create SupplierInvoice DRAFT
+→ create the relevant ordinary business DRAFT
 
 AI must never submit the draft for approval.
 

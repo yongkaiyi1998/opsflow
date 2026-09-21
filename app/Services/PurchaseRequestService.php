@@ -40,8 +40,8 @@ class PurchaseRequestService
         return DB::transaction(function () use ($attributes, $requester): PurchaseRequest {
             $lockedRequester = User::query()->whereKey($requester->id)->lockForUpdate()->firstOrFail();
             Gate::forUser($lockedRequester)->authorize('create', PurchaseRequest::class);
-            $departmentId = $this->validDepartmentId($lockedRequester);
-            [$categoryId, $vendorId] = $this->validateMasterData($attributes);
+            $departmentId = $this->validDepartmentId($lockedRequester, true);
+            [$categoryId, $vendorId] = $this->validateMasterData($attributes, true);
             [$items, $subtotal, $tax, $total] = $this->calculate($attributes);
 
             $purchaseRequest = PurchaseRequest::forceCreate([
@@ -251,8 +251,14 @@ class PurchaseRequestService
                 throw new AuthorizationException('Submitted purchase requests cannot be deleted.');
             }
 
-            $files = $lockedRequest->attachments()->get(['id', 'disk', 'path'])
-                ->map(fn ($attachment): array => ['disk' => $attachment->disk, 'path' => $attachment->path])
+            $files = $lockedRequest->attachments()
+                ->withExists('sourcePurchaseQuotationIntake')
+                ->get(['id', 'disk', 'path'])
+                ->map(fn ($attachment): array => [
+                    'disk' => $attachment->disk,
+                    'path' => $attachment->path,
+                    'preserve_intake_source' => $attachment->source_purchase_quotation_intake_exists,
+                ])
                 ->all();
             $lockedRequest->attachments()->delete();
             $lockedRequest->items()->delete();
@@ -262,7 +268,9 @@ class PurchaseRequestService
         }, 5);
 
         foreach ($files as $file) {
-            Storage::disk($file['disk'])->delete($file['path']);
+            if (! $file['preserve_intake_source']) {
+                Storage::disk($file['disk'])->delete($file['path']);
+            }
         }
     }
 

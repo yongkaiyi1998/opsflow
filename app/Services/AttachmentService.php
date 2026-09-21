@@ -90,7 +90,8 @@ class AttachmentService
 
             $lockedAttachment->setRelation('attachable', $lockedAttachable);
             Gate::forUser($lockedUser)->authorize('delete', $lockedAttachment);
-            $preserveIntakeSource = $lockedAttachment->sourceExpenseReceiptIntake()->exists();
+            $preserveIntakeSource = $lockedAttachment->sourceExpenseReceiptIntake()->exists()
+                || $lockedAttachment->sourcePurchaseQuotationIntake()->exists();
             $lockedAttachment->delete();
 
             return [

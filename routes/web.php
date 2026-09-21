@@ -22,6 +22,9 @@ use App\Http\Controllers\ExpenseReceiptIntakeController;
 use App\Http\Controllers\ExpenseReceiptIntakeResultController;
 use App\Http\Controllers\InvoiceIntakeController;
 use App\Http\Controllers\NotificationCenterController;
+use App\Http\Controllers\PurchaseQuotationIntakeController;
+use App\Http\Controllers\PurchaseQuotationIntakeResultController;
+use App\Http\Controllers\PurchaseQuotationVerificationController;
 use App\Http\Controllers\PurchaseRequestAttachmentController;
 use App\Http\Controllers\PurchaseRequestCategorySuggestionController;
 use App\Http\Controllers\PurchaseRequestController;
@@ -77,6 +80,24 @@ Route::middleware(['auth', 'auth.session', 'active'])->group(function (): void {
     Route::match(['post', 'put'], 'purchase-requests/{purchase_request}/category-suggestion', [PurchaseRequestCategorySuggestionController::class, 'update'])
         ->name('purchase-requests.category-suggestion.update');
     Route::resource('purchase-requests', PurchaseRequestController::class);
+    Route::resource('purchase-quotation-intakes', PurchaseQuotationIntakeController::class)
+        ->parameters(['purchase-quotation-intakes' => 'intake_batch'])
+        ->only(['index', 'create', 'store', 'show']);
+    Route::get('purchase-quotation-intakes/{intake_batch}/documents/{document_intake}/original', DocumentIntakeOriginalController::class)
+        ->scopeBindings()
+        ->name('purchase-quotation-intakes.documents.original');
+    Route::get('purchase-quotation-intakes/{intake_batch}/documents/{document_intake}', PurchaseQuotationIntakeResultController::class)
+        ->scopeBindings()
+        ->name('purchase-quotation-intakes.documents.show');
+    Route::get('purchase-quotation-intakes/{intake_batch}/documents/{document_intake}/verify', [PurchaseQuotationVerificationController::class, 'create'])
+        ->scopeBindings()
+        ->name('purchase-quotation-intakes.documents.verification.create');
+    Route::post('purchase-quotation-intakes/{intake_batch}/documents/{document_intake}/verify', [PurchaseQuotationVerificationController::class, 'store'])
+        ->scopeBindings()
+        ->name('purchase-quotation-intakes.documents.verification.store');
+    Route::post('purchase-quotation-intakes/{intake_batch}/documents/{document_intake}/extract', DocumentIntakeExtractionController::class)
+        ->scopeBindings()
+        ->name('purchase-quotation-intakes.documents.extract');
     Route::post('purchase-requests/{purchase_request}/submit', [PurchaseRequestSubmissionController::class, 'store'])->name('purchase-requests.submit');
     Route::post('purchase-requests/{purchase_request}/ai-analysis', [RecordAnalysisController::class, 'purchaseRequest'])->name('purchase-requests.ai-analysis');
     Route::post('purchase-requests/{purchase_request}/resubmit', [PurchaseRequestLifecycleController::class, 'resubmit'])->name('purchase-requests.resubmit');

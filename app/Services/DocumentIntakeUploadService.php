@@ -6,6 +6,7 @@ use App\DocumentIntakeStatus;
 use App\IntakeDocumentType;
 use App\Models\ExpenseClaim;
 use App\Models\IntakeBatch;
+use App\Models\PurchaseRequest;
 use App\Models\User;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
@@ -109,7 +110,11 @@ class DocumentIntakeUploadService
         $maxFiles = (int) config('document_intake.max_files', 20);
 
         if ($files === [] || count($files) > $maxFiles) {
-            $label = $documentType === IntakeDocumentType::ExpenseReceipt ? 'receipt documents' : 'invoice documents';
+            $label = match ($documentType) {
+                IntakeDocumentType::ExpenseReceipt => 'receipt documents',
+                IntakeDocumentType::PurchaseQuotation => 'quotation documents',
+                IntakeDocumentType::SupplierInvoice => 'invoice documents',
+            };
 
             throw ValidationException::withMessages([
                 'documents' => "Select between 1 and {$maxFiles} {$label}.",
@@ -142,6 +147,7 @@ class DocumentIntakeUploadService
         match ($documentType) {
             IntakeDocumentType::SupplierInvoice => Gate::forUser($uploader)->authorize('create', IntakeBatch::class),
             IntakeDocumentType::ExpenseReceipt => Gate::forUser($uploader)->authorize('create', ExpenseClaim::class),
+            IntakeDocumentType::PurchaseQuotation => Gate::forUser($uploader)->authorize('create', PurchaseRequest::class),
         };
     }
 
@@ -188,7 +194,11 @@ class DocumentIntakeUploadService
         $name = Str::afterLast($name, '/');
         $name = preg_replace('/[\x00-\x1F\x7F]/u', '', $name) ?? '';
         $name = trim($name);
-        $fallback = $documentType === IntakeDocumentType::ExpenseReceipt ? 'receipt' : 'invoice';
+        $fallback = match ($documentType) {
+            IntakeDocumentType::ExpenseReceipt => 'receipt',
+            IntakeDocumentType::PurchaseQuotation => 'quotation',
+            IntakeDocumentType::SupplierInvoice => 'invoice',
+        };
 
         return Str::limit($name !== '' ? $name : "{$fallback}.{$extension}", 255, '');
     }

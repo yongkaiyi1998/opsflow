@@ -47,6 +47,12 @@ class DocumentIntakeOriginalController extends Controller
             return;
         }
 
+        if (request()->routeIs('purchase-quotation-intakes.*')) {
+            abort_unless($documentIntake->document_type === IntakeDocumentType::PurchaseQuotation, 404);
+
+            return;
+        }
+
         abort_unless($documentIntake->document_type === IntakeDocumentType::SupplierInvoice, 404);
     }
 }

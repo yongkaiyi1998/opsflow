@@ -3,7 +3,9 @@
 namespace App\Policies;
 
 use App\IntakeDocumentType;
+use App\Models\ExpenseClaim;
 use App\Models\IntakeBatch;
+use App\Models\PurchaseRequest;
 use App\Models\User;
 use App\UserRole;
 
@@ -22,19 +24,25 @@ class IntakeBatchPolicy
      */
     public function view(User $user, IntakeBatch $intakeBatch): bool
     {
-        $containsReceipt = $intakeBatch->documentIntakes()
-            ->where('document_type', IntakeDocumentType::ExpenseReceipt->value)
-            ->exists();
+        $documentTypes = $intakeBatch->documentIntakes()->reorder()->distinct()->pluck('document_type');
 
-        if ($containsReceipt) {
-            $containsOtherDocumentType = $intakeBatch->documentIntakes()
-                ->where('document_type', '!=', IntakeDocumentType::ExpenseReceipt->value)
-                ->exists();
+        if ($documentTypes->count() !== 1) {
+            return false;
+        }
 
-            return ! $containsOtherDocumentType
-                && $user->isActive()
-                && $user->department_id !== null
-                && $intakeBatch->uploaded_by === $user->id;
+        $storedDocumentType = $documentTypes->first();
+        $documentType = $storedDocumentType instanceof IntakeDocumentType
+            ? $storedDocumentType
+            : IntakeDocumentType::tryFrom((string) $storedDocumentType);
+
+        if ($documentType === IntakeDocumentType::ExpenseReceipt) {
+            return $intakeBatch->uploaded_by === $user->id
+                && $user->can('create', ExpenseClaim::class);
+        }
+
+        if ($documentType === IntakeDocumentType::PurchaseQuotation) {
+            return $intakeBatch->uploaded_by === $user->id
+                && $user->can('create', PurchaseRequest::class);
         }
 
         return $this->canAccess($user);

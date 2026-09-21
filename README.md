@@ -14,7 +14,7 @@ Teams often coordinate spend approvals through email and chat, making it hard to
 - Resubmission and withdrawal without deleting prior decisions.
 - Private attachments, database notifications, audit records, and operational dashboards.
 - Preserved references and history for every submitted business record.
-- Optional AI-assisted invoice and expense-receipt intake, summaries, category suggestions, workflow explanations, and editable writing help.
+- Optional AI-assisted invoice, expense-receipt, and purchase-quotation intake, plus summaries, category suggestions, workflow explanations, and editable writing help.
 
 ## V1 modules
 
@@ -26,7 +26,7 @@ Teams often coordinate spend approvals through email and chat, making it hard to
 | Workflow Configuration | Draft versions, ordered rule groups and steps, validation, publishing, cloning, and immutable published versions. |
 | Approval Operations | Sequential `ANY` steps, persisted assignments, first-committed-action-wins decisions, next-step activation, and final outcomes. |
 | Operations | Role-aware dashboard summaries, approval timelines, notifications, and focused activity auditing. |
-| AI Assistance | Batch invoice extraction, human verification, vendor/category suggestions, duplicate flags, record summaries, workflow explanations, and editable drafts. |
+| AI Assistance | Private invoice, receipt, and quotation extraction with human verification, vendor/category suggestions, duplicate flags, record summaries, workflow explanations, and editable drafts. |
 
 ## Architecture
 
@@ -125,6 +125,15 @@ Private receipt batch → queued AI extraction → candidate data → human veri
 ```
 
 AI values remain untrusted candidates, each category is confirmed by the employee, and deterministic Expense Claim rules calculate the authoritative gross total and preserve each original as a private item attachment.
+
+Purchase Quotation intake follows the same private upload and extraction boundary:
+
+```text
+Private quotation → queued AI extraction → candidate data → human verification
+→ one Purchase Request DRAFT with the original quotation attached privately
+```
+
+Vendor and category remain human-confirmed. Existing Purchase Request quantity, Money, ownership, and reference rules remain authoritative, and creating the draft does not submit it for approval. Quotation comparison, ranking, and RFQ workflows are outside the current scope.
 
 AI extracts, summarizes, suggests, explains, and flags. Deterministic services validate totals and route workflows. Humans verify data and submit approval decisions. Setting `AI_ENABLED=false` removes AI actions while manual records, workflows, approvals, and private invoice uploads continue to work.
 
@@ -248,7 +257,7 @@ The suite covers authorization and IDOR boundaries, decimal calculations, workfl
 
 ## Deliberate V1 boundaries
 
-OpsFlow does not execute payments, reimbursements, purchase orders, budgets, accounting synchronization, delegation, parallel workflows, quotation intake, autonomous agents, predictive approval scoring, or AI decisions. Receipt intake creates an unsubmitted Expense Claim draft only after human verification. Approved records are ready for a downstream business process; they are not paid or reimbursed. AI remains advisory and outside authoritative totals, routing, and approval decisions.
+OpsFlow does not execute payments, reimbursements, purchase orders, budgets, accounting synchronization, delegation, parallel workflows, quotation comparison or RFQ workflows, autonomous agents, predictive approval scoring, or AI decisions. Receipt and quotation intake create unsubmitted drafts only after human verification. Approved records are ready for a downstream business process; they are not paid or reimbursed. AI remains advisory and outside authoritative totals, routing, and approval decisions.
 
 ## License
 

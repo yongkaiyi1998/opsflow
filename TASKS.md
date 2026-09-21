@@ -1704,6 +1704,16 @@ RI03 ✅ Receipt Hardening, Tests & Demo Polish
 
 **Expense Receipt Intake phase: Complete ✅**
 
+## Purchase Quotation Intake
+
+```text
+QI01 ✅ Quotation Intake & Extraction
+QI02 ✅ Human Verification → Purchase Request Draft
+QI03 ✅ Quotation Hardening, Tests & Demo Polish
+```
+
+**Purchase Quotation Intake phase: Complete ✅**
+
 ---
 
 # 5. Codex Execution Style
